@@ -1,0 +1,11 @@
+# HIVE URL Extract — xlsx_attachment.eml
+# Generated : 2026-07-09 19:18:46 UTC
+# All URLs defanged. Sources noted.
+# ─────────────────────────────────────────────
+
+[body:plain]
+hxxps://quarterly-docs[.]com/xlsx-report?ref=Q12024
+
+[attachment:data.xlsx]
+hxxps://malicious-xlsx-link[.]com/payload?ref=9921
+hxxp://xlsx-support[.]net/contact

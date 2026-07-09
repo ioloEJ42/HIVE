@@ -463,6 +463,9 @@ ATTACH_SAMPLE_PATH = Path(__file__).parent / "samples" / "with_attachment.eml"
 MALFORMED_PATH = Path(__file__).parent / "samples" / "malformed_headers.eml"
 HTML_ONLY_PATH = Path(__file__).parent / "samples" / "html_only.eml"
 PDF_SAMPLE_PATH = Path(__file__).parent / "samples" / "pdf_attachment.eml"
+DOCX_SAMPLE_PATH = Path(__file__).parent / "samples" / "docx_attachment.eml"
+XLSX_SAMPLE_PATH = Path(__file__).parent / "samples" / "xlsx_attachment.eml"
+PPTX_SAMPLE_PATH = Path(__file__).parent / "samples" / "pptx_attachment.eml"
 
 
 @pytest.fixture(scope="module")
@@ -487,6 +490,24 @@ def html_only_email():
 def pdf_email():
     """Parse the PDF attachment sample once for reuse across tests."""
     return parse_eml(PDF_SAMPLE_PATH)
+
+
+@pytest.fixture(scope="module")
+def docx_email():
+    """Parse the DOCX attachment sample once for reuse across tests."""
+    return parse_eml(DOCX_SAMPLE_PATH)
+
+
+@pytest.fixture(scope="module")
+def xlsx_email():
+    """Parse the XLSX attachment sample once for reuse across tests."""
+    return parse_eml(XLSX_SAMPLE_PATH)
+
+
+@pytest.fixture(scope="module")
+def pptx_email():
+    """Parse the PPTX attachment sample once for reuse across tests."""
+    return parse_eml(PPTX_SAMPLE_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -1032,3 +1053,237 @@ def test_pdf_process_file_output(tmp_path):
     urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
     assert "malicious-pdf-link" in urls_content
     assert "attachment:report.pdf" in urls_content
+
+
+# ---------------------------------------------------------------------------
+# GROUP 25: docx_attachment.eml — DOCX URL extraction
+# ---------------------------------------------------------------------------
+
+
+def test_docx_email_parses(docx_email):
+    assert docx_email is not None
+    assert docx_email.subject == "Q1 Word Report - Review Required"
+
+
+def test_docx_has_one_attachment(docx_email):
+    assert len(docx_email.attachments) == 1
+
+
+def test_docx_attachment_filename(docx_email):
+    assert docx_email.attachments[0].filename == "report.docx"
+
+
+def test_docx_attachment_hashes_populated(docx_email):
+    attachment = docx_email.attachments[0]
+    assert attachment.hashes["md5"]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_docx_attachment_size_nonzero(docx_email):
+    assert docx_email.attachments[0].size > 0
+
+
+def test_docx_body_url_found(docx_email):
+    findings = extract_urls(docx_email)
+    body_findings = [finding for finding in findings if finding.source == "body:plain"]
+    assert len(body_findings) >= 1
+    assert any("quarterly-docs" in finding.defanged_url for finding in body_findings)
+
+
+def test_docx_attachment_urls_found(docx_email):
+    findings = extract_urls(docx_email)
+    docx_findings = [
+        finding for finding in findings if finding.source == "attachment:report.docx"
+    ]
+    assert len(docx_findings) >= 3
+
+
+def test_docx_paragraph_url_found(docx_email):
+    findings = extract_urls(docx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("malicious-docx-link" in url for url in all_urls)
+
+
+def test_docx_support_url_found(docx_email):
+    findings = extract_urls(docx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("docx-support" in url for url in all_urls)
+
+
+def test_docx_table_url_found(docx_email):
+    findings = extract_urls(docx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("docx-table-link" in url for url in all_urls)
+
+
+def test_docx_total_url_count(docx_email):
+    findings = extract_urls(docx_email)
+    assert len(findings) == 4
+
+
+def test_docx_all_urls_defanged(docx_email):
+    for finding in extract_urls(docx_email):
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_docx_process_file_output(tmp_path):
+    result = process_file(DOCX_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.attachment_count == 1
+    assert result.url_count == 4
+    output_path = result.output_path
+    assert (output_path / "attachments" / "report.docx").exists()
+    urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "malicious-docx-link" in urls_content
+    assert "docx-table-link" in urls_content
+    assert "attachment:report.docx" in urls_content
+
+
+# ---------------------------------------------------------------------------
+# GROUP 26: xlsx_attachment.eml — XLSX URL extraction
+# ---------------------------------------------------------------------------
+
+
+def test_xlsx_email_parses(xlsx_email):
+    assert xlsx_email is not None
+    assert xlsx_email.subject == "Q1 Excel Report - Review Required"
+
+
+def test_xlsx_has_one_attachment(xlsx_email):
+    assert len(xlsx_email.attachments) == 1
+
+
+def test_xlsx_attachment_filename(xlsx_email):
+    assert xlsx_email.attachments[0].filename == "data.xlsx"
+
+
+def test_xlsx_attachment_hashes_populated(xlsx_email):
+    attachment = xlsx_email.attachments[0]
+    assert attachment.hashes["md5"]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_xlsx_body_url_found(xlsx_email):
+    findings = extract_urls(xlsx_email)
+    body_findings = [finding for finding in findings if finding.source == "body:plain"]
+    assert any("quarterly-docs" in finding.defanged_url for finding in body_findings)
+
+
+def test_xlsx_attachment_urls_found(xlsx_email):
+    findings = extract_urls(xlsx_email)
+    xlsx_findings = [
+        finding for finding in findings if finding.source == "attachment:data.xlsx"
+    ]
+    assert len(xlsx_findings) >= 2
+
+
+def test_xlsx_malicious_url_found(xlsx_email):
+    findings = extract_urls(xlsx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("malicious-xlsx-link" in url for url in all_urls)
+
+
+def test_xlsx_support_url_found(xlsx_email):
+    findings = extract_urls(xlsx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("xlsx-support" in url for url in all_urls)
+
+
+def test_xlsx_total_url_count(xlsx_email):
+    findings = extract_urls(xlsx_email)
+    assert len(findings) == 3
+
+
+def test_xlsx_all_urls_defanged(xlsx_email):
+    for finding in extract_urls(xlsx_email):
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_xlsx_process_file_output(tmp_path):
+    result = process_file(XLSX_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.attachment_count == 1
+    assert result.url_count == 3
+    output_path = result.output_path
+    assert (output_path / "attachments" / "data.xlsx").exists()
+    urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "malicious-xlsx-link" in urls_content
+    assert "attachment:data.xlsx" in urls_content
+
+
+# ---------------------------------------------------------------------------
+# GROUP 27: pptx_attachment.eml — PPTX URL extraction
+# ---------------------------------------------------------------------------
+
+
+def test_pptx_email_parses(pptx_email):
+    assert pptx_email is not None
+    assert pptx_email.subject == "Q1 PowerPoint Report - Review Required"
+
+
+def test_pptx_has_one_attachment(pptx_email):
+    assert len(pptx_email.attachments) == 1
+
+
+def test_pptx_attachment_filename(pptx_email):
+    assert pptx_email.attachments[0].filename == "slides.pptx"
+
+
+def test_pptx_attachment_hashes_populated(pptx_email):
+    attachment = pptx_email.attachments[0]
+    assert attachment.hashes["md5"]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_pptx_body_url_found(pptx_email):
+    findings = extract_urls(pptx_email)
+    body_findings = [finding for finding in findings if finding.source == "body:plain"]
+    assert any("quarterly-docs" in finding.defanged_url for finding in body_findings)
+
+
+def test_pptx_attachment_urls_found(pptx_email):
+    findings = extract_urls(pptx_email)
+    pptx_findings = [
+        finding for finding in findings if finding.source == "attachment:slides.pptx"
+    ]
+    assert len(pptx_findings) >= 2
+
+
+def test_pptx_malicious_url_found(pptx_email):
+    findings = extract_urls(pptx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("malicious-pptx-link" in url for url in all_urls)
+
+
+def test_pptx_support_url_found(pptx_email):
+    findings = extract_urls(pptx_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("pptx-support" in url for url in all_urls)
+
+
+def test_pptx_total_url_count(pptx_email):
+    findings = extract_urls(pptx_email)
+    assert len(findings) == 3
+
+
+def test_pptx_all_urls_defanged(pptx_email):
+    for finding in extract_urls(pptx_email):
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_pptx_process_file_output(tmp_path):
+    result = process_file(PPTX_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.attachment_count == 1
+    assert result.url_count == 3
+    output_path = result.output_path
+    assert (output_path / "attachments" / "slides.pptx").exists()
+    urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "malicious-pptx-link" in urls_content
+    assert "attachment:slides.pptx" in urls_content

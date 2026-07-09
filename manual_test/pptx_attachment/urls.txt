@@ -1,0 +1,11 @@
+# HIVE URL Extract — pptx_attachment.eml
+# Generated : 2026-07-09 19:18:47 UTC
+# All URLs defanged. Sources noted.
+# ─────────────────────────────────────────────
+
+[body:plain]
+hxxps://quarterly-docs[.]com/pptx-report?ref=Q12024
+
+[attachment:slides.pptx]
+hxxps://malicious-pptx-link[.]com/verify?token=abc
+hxxp://pptx-support[.]net/help

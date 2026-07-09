@@ -1,0 +1,41 @@
+═══════════════════════════════════════════════════════════
+HIVE - Email Forensic Summary
+Version  : 1.0.0
+Analysed : 2026-07-09 19:18:47 UTC
+═══════════════════════════════════════════════════════════
+
+SOURCE FILE
+  Path   : /Users/ioloej/Github/HIVE/tests/samples/pptx_attachment.eml
+  MD5    : ca24a32ee2705c8f7a85d12a97722fb4
+  SHA256 : 90ddbb10a495221f79acffada493dec900a6fd96d0b9a58add501e9b2f67035c
+
+EMAIL METADATA
+  Subject  : Q1 PowerPoint Report - Review Required
+  From     : "Quarterly Reports" <reports@quarterly-docs.com>
+  Reply-To : reports@quarterly-docs.com
+  To       : finance@vunhst.nhs.uk
+  Date     : 2024-03-13 10:00:00 UTC
+
+ROUTING (Received headers, oldest → newest)
+  [1] localhost (127[.]0[.]0[.]1) → mail.quarterly-docs.com  Wed, 13 Mar 2024 10:00:00 +0000
+  [2] mail.quarterly-docs.com (198[.]51[.]100[.]44) → mx1.protection.outlook.com  Wed, 13 Mar 2024 10:00:04 +0000
+
+AUTHENTICATION
+  SPF   : FAIL
+  DKIM  : NONE
+  DMARC : FAIL
+  ARC   : NONE
+
+ATTACHMENTS (1)
+  slides.pptx | 28333 bytes | SHA256: d9d4011ec0214a02b5d2c6406a04dff5ace4080a5a0e71cf5b84cb4741a1ad11
+
+NESTED EMAILS (0)
+  [None]
+
+URLS (3 total)
+  hxxps://quarterly-docs[.]com/pptx-report?ref=Q12024  ← body:plain
+  hxxps://malicious-pptx-link[.]com/verify?token=abc  ← attachment:slides.pptx
+  hxxp://pptx-support[.]net/help  ← attachment:slides.pptx
+
+WARNINGS (0)
+  [None]

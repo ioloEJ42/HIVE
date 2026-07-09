@@ -47,6 +47,13 @@ tests/samples/*.xlsx
 !tests/samples/pdf_attachment.eml
 !tests/samples/test_attachment.pdf
 !tests/create_test_pdf.py
+!tests/samples/docx_attachment.eml
+!tests/samples/xlsx_attachment.eml
+!tests/samples/pptx_attachment.eml
+!tests/samples/test_attachment.docx
+!tests/samples/test_attachment.xlsx
+!tests/samples/test_attachment.pptx
+!tests/create_test_office_docs.py
 
 # ─── macOS ────────────────────────────────────────────────
 .DS_Store

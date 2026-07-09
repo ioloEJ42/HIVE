@@ -1,0 +1,42 @@
+═══════════════════════════════════════════════════════════
+HIVE - Email Forensic Summary
+Version  : 1.0.0
+Analysed : 2026-07-09 19:18:46 UTC
+═══════════════════════════════════════════════════════════
+
+SOURCE FILE
+  Path   : /Users/ioloej/Github/HIVE/tests/samples/docx_attachment.eml
+  MD5    : a5da24eb351ca101a0c9b0179537adaf
+  SHA256 : c7124ac2460d7f0e5df3f2bb58dcca031b1b00432338dcdd9dba351b0d2910ba
+
+EMAIL METADATA
+  Subject  : Q1 Word Report - Review Required
+  From     : "Quarterly Reports" <reports@quarterly-docs.com>
+  Reply-To : reports@quarterly-docs.com
+  To       : finance@vunhst.nhs.uk
+  Date     : 2024-03-13 10:00:00 UTC
+
+ROUTING (Received headers, oldest → newest)
+  [1] localhost (127[.]0[.]0[.]1) → mail.quarterly-docs.com  Wed, 13 Mar 2024 10:00:00 +0000
+  [2] mail.quarterly-docs.com (198[.]51[.]100[.]44) → mx1.protection.outlook.com  Wed, 13 Mar 2024 10:00:04 +0000
+
+AUTHENTICATION
+  SPF   : FAIL
+  DKIM  : NONE
+  DMARC : FAIL
+  ARC   : NONE
+
+ATTACHMENTS (1)
+  report.docx | 36833 bytes | SHA256: 17eaa27b28607645c89c43ecea343e3f1bf5b1ad68fc0f9f13f32060f181fe24
+
+NESTED EMAILS (0)
+  [None]
+
+URLS (4 total)
+  hxxps://quarterly-docs[.]com/docx-report?ref=Q12024  ← body:plain
+  hxxps://malicious-docx-link[.]com/approve?id=1234  ← attachment:report.docx
+  hxxp://docx-support[.]net/help  ← attachment:report.docx
+  hxxps://docx-table-link[.]com/portal  ← attachment:report.docx
+
+WARNINGS (0)
+  [None]
