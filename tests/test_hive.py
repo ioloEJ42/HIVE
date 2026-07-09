@@ -1377,3 +1377,455 @@ def test_rtf_process_file_output(tmp_path):
     urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
     assert "malicious-rtf-link" in urls_content
     assert "attachment:report.rtf" in urls_content
+
+
+from hive.extractors.urls import (
+    UrlFinding,
+    _check_homoglyphs,
+    _is_url_shortener,
+    check_punycode,
+    get_url_warnings,
+)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 29: URL shortener detection
+# ---------------------------------------------------------------------------
+
+
+def test_shortener_bitly():
+    assert _is_url_shortener("https://bit.ly/3xK9mPq") is True
+
+
+def test_shortener_tinyurl():
+    assert _is_url_shortener("https://tinyurl.com/abc123") is True
+
+
+def test_shortener_tco():
+    assert _is_url_shortener("https://t.co/xyzabc") is True
+
+
+def test_shortener_googl():
+    assert _is_url_shortener("https://goo.gl/maps/abc") is True
+
+
+def test_shortener_owly():
+    assert _is_url_shortener("https://ow.ly/abc123") is True
+
+
+def test_shortener_rebrandly():
+    assert _is_url_shortener("https://rebrand.ly/mylink") is True
+
+
+def test_shortener_isgd():
+    assert _is_url_shortener("https://is.gd/abc") is True
+
+
+def test_shortener_cutt():
+    assert _is_url_shortener("https://cutt.ly/xyz") is True
+
+
+def test_shortener_youtu_be():
+    assert _is_url_shortener("https://youtu.be/dQw4w9WgXcQ") is True
+
+
+def test_shortener_lnkd():
+    assert _is_url_shortener("https://lnkd.in/abc123") is True
+
+
+def test_not_shortener_google():
+    assert _is_url_shortener("https://google.com/search?q=test") is False
+
+
+def test_not_shortener_nhs():
+    assert _is_url_shortener("https://nhs.uk/conditions") is False
+
+
+def test_not_shortener_microsoft():
+    assert _is_url_shortener("https://microsoft.com/en-us/security") is False
+
+
+def test_not_shortener_empty():
+    assert _is_url_shortener("") is False
+
+
+def test_not_shortener_malformed():
+    assert _is_url_shortener("not-a-url") is False
+
+
+def test_shortener_www_prefix():
+    assert _is_url_shortener("https://www.bit.ly/abc") is True
+
+
+def test_shortener_with_path():
+    assert _is_url_shortener("https://tinyurl.com/very/long/path?q=1") is True
+
+
+def test_shortener_flag_set_in_finding():
+    from hive.extractors.urls import _make_finding
+
+    finding = _make_finding("https://bit.ly/abc123", "body:plain", 0)
+    assert finding.is_shortener is True
+
+
+def test_non_shortener_flag_not_set():
+    from hive.extractors.urls import _make_finding
+
+    finding = _make_finding("https://google.com/path", "body:plain", 0)
+    assert finding.is_shortener is False
+
+
+def test_shortener_warning_in_get_url_warnings():
+    finding = UrlFinding(
+        raw_url="https://bit.ly/abc123",
+        defanged_url="hxxps://bit[.]ly/abc123",
+        source="body:plain",
+        depth=0,
+        is_shortener=True,
+    )
+    warnings = get_url_warnings([finding])
+    assert len(warnings) == 1
+    assert "shortener" in warnings[0].lower()
+    assert "bit[.]ly" in warnings[0]
+
+
+def test_shortener_warning_mentions_destination_unknown():
+    finding = UrlFinding(
+        raw_url="https://tinyurl.com/abc",
+        defanged_url="hxxps://tinyurl[.]com/abc",
+        source="body:plain",
+        depth=0,
+        is_shortener=True,
+    )
+    warnings = get_url_warnings([finding])
+    assert any("destination unknown" in warning.lower() for warning in warnings)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 30: Punycode detection
+# ---------------------------------------------------------------------------
+
+
+def test_punycode_detected():
+    is_punycode, decoded = check_punycode("https://xn--pypl-ppa.com/login")
+    assert is_punycode is True
+    assert decoded != ""
+
+
+def test_punycode_clean_domain_not_flagged():
+    is_punycode, decoded = check_punycode("https://google.com")
+    assert is_punycode is False
+    assert decoded == ""
+
+
+def test_punycode_clean_nhs_not_flagged():
+    is_punycode, decoded = check_punycode("https://nhs.uk/conditions")
+    assert is_punycode is False
+
+
+def test_punycode_empty_url():
+    is_punycode, decoded = check_punycode("")
+    assert is_punycode is False
+    assert decoded == ""
+
+
+def test_punycode_malformed_url():
+    is_punycode, decoded = check_punycode("not-a-url")
+    assert is_punycode is False
+
+
+def test_punycode_returns_decoded_string():
+    is_punycode, decoded = check_punycode("https://xn--pypl-ppa.com")
+    assert is_punycode is True
+    assert isinstance(decoded, str)
+    assert len(decoded) > 0
+
+
+def test_punycode_subdomain():
+    is_punycode, decoded = check_punycode("https://xn--pypl-ppa.evil.com/path")
+    assert is_punycode is True
+
+
+def test_punycode_no_xn_prefix_not_flagged():
+    is_punycode, decoded = check_punycode("https://my-company.com/page")
+    assert is_punycode is False
+
+
+def test_punycode_flag_set_in_finding():
+    from hive.extractors.urls import _make_finding
+
+    finding = _make_finding("https://xn--pypl-ppa.com/login", "body:plain", 0)
+    assert finding.is_punycode is True
+
+
+def test_punycode_flag_not_set_for_clean_url():
+    from hive.extractors.urls import _make_finding
+
+    finding = _make_finding("https://paypal.com/login", "body:plain", 0)
+    assert finding.is_punycode is False
+
+
+def test_punycode_warning_in_get_url_warnings():
+    finding = UrlFinding(
+        raw_url="https://xn--pypl-ppa.com/login",
+        defanged_url="hxxps://xn--pypl-ppa[.]com/login",
+        source="body:plain",
+        depth=0,
+        is_punycode=True,
+    )
+    warnings = get_url_warnings([finding])
+    assert len(warnings) >= 1
+    assert any("punycode" in warning.lower() for warning in warnings)
+
+
+def test_punycode_warning_shows_renders_as():
+    finding = UrlFinding(
+        raw_url="https://xn--pypl-ppa.com/login",
+        defanged_url="hxxps://xn--pypl-ppa[.]com/login",
+        source="body:plain",
+        depth=0,
+        is_punycode=True,
+    )
+    warnings = get_url_warnings([finding])
+    assert any("renders as" in warning.lower() for warning in warnings)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 31: Homoglyph / mixed-script detection
+# ---------------------------------------------------------------------------
+
+
+def test_homoglyph_cyrillic_a_detected():
+    is_suspicious, detail = _check_homoglyphs("https://p\u0430yp\u0430l.com")
+    assert is_suspicious is True
+    assert "mixed-script" in detail.lower() or "cyrillic" in detail.lower()
+
+
+def test_homoglyph_cyrillic_o_detected():
+    is_suspicious, detail = _check_homoglyphs("https://micr\u043es\u043eft.com")
+    assert is_suspicious is True
+
+
+def test_homoglyph_greek_mixed_detected():
+    is_suspicious, detail = _check_homoglyphs("https://g\u03bfgle.com")
+    assert is_suspicious is True
+
+
+def test_homoglyph_clean_latin_not_flagged():
+    is_suspicious, detail = _check_homoglyphs("https://google.com")
+    assert is_suspicious is False
+    assert detail == ""
+
+
+def test_homoglyph_clean_nhs_not_flagged():
+    is_suspicious, detail = _check_homoglyphs("https://nhs.uk")
+    assert is_suspicious is False
+
+
+def test_homoglyph_empty_url_not_flagged():
+    is_suspicious, detail = _check_homoglyphs("")
+    assert is_suspicious is False
+
+
+def test_homoglyph_detail_contains_codepoint():
+    is_suspicious, detail = _check_homoglyphs("https://p\u0430ypal.com")
+    assert is_suspicious is True
+    assert "U+0430" in detail
+
+
+def test_homoglyph_detail_contains_unicode_name():
+    is_suspicious, detail = _check_homoglyphs("https://p\u0430ypal.com")
+    assert is_suspicious is True
+    assert "CYRILLIC" in detail.upper()
+
+
+def test_homoglyph_mixed_script_label():
+    is_suspicious, detail = _check_homoglyphs("https://p\u0430ypal.com")
+    assert is_suspicious is True
+    assert "mixed-script" in detail.lower()
+
+
+def test_homoglyph_non_ascii_single_script():
+    is_suspicious, detail = _check_homoglyphs(
+        "https://\u043f\u0440\u0438\u043c\u0435\u0440.com"
+    )
+    assert is_suspicious is True
+
+
+def test_homoglyph_accented_latin():
+    is_suspicious, detail = _check_homoglyphs("https://caf\u00e9.com")
+    assert is_suspicious is True
+
+
+def test_homoglyph_returns_false_for_ascii_only():
+    is_suspicious, detail = _check_homoglyphs("https://paypal.com")
+    assert is_suspicious is False
+    assert detail == ""
+
+
+def test_homoglyph_flag_set_in_finding():
+    from hive.extractors.urls import _make_finding
+
+    finding = _make_finding("https://p\u0430ypal.com/login", "body:plain", 0)
+    assert finding.homoglyph_detail != ""
+
+
+def test_homoglyph_flag_not_set_for_clean_url():
+    from hive.extractors.urls import _make_finding
+
+    finding = _make_finding("https://paypal.com/login", "body:plain", 0)
+    assert finding.homoglyph_detail == ""
+
+
+def test_homoglyph_warning_in_get_url_warnings():
+    finding = UrlFinding(
+        raw_url="https://p\u0430ypal.com",
+        defanged_url="hxxps://p\u0430ypal[.]com",
+        source="body:plain",
+        depth=0,
+        homoglyph_detail="mixed-script domain (possible homoglyph attack)\nа (U+0430, CYRILLIC SMALL LETTER A)",
+    )
+    warnings = get_url_warnings([finding])
+    assert len(warnings) >= 1
+    assert any("unicode" in warning.lower() or "suspicious" in warning.lower() for warning in warnings)
+
+
+def test_homoglyph_warning_mentions_detail():
+    finding = UrlFinding(
+        raw_url="https://p\u0430ypal.com",
+        defanged_url="hxxps://p\u0430ypal[.]com",
+        source="body:plain",
+        depth=0,
+        homoglyph_detail="mixed-script domain (possible homoglyph attack)\nа (U+0430, CYRILLIC SMALL LETTER A)",
+    )
+    warnings = get_url_warnings([finding])
+    assert any("mixed-script" in warning.lower() for warning in warnings)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 32: Combined warnings — get_url_warnings()
+# ---------------------------------------------------------------------------
+
+
+def test_get_url_warnings_empty_list():
+    warnings = get_url_warnings([])
+    assert warnings == []
+
+
+def test_get_url_warnings_no_flags():
+    finding = UrlFinding(
+        raw_url="https://google.com",
+        defanged_url="hxxps://google[.]com",
+        source="body:plain",
+        depth=0,
+    )
+    warnings = get_url_warnings([finding])
+    assert warnings == []
+
+
+def test_get_url_warnings_multiple_flags_same_finding():
+    finding = UrlFinding(
+        raw_url="https://bit.ly/p\u0430ypal",
+        defanged_url="hxxps://bit[.]ly/p\u0430ypal",
+        source="body:plain",
+        depth=0,
+        is_shortener=True,
+        homoglyph_detail="mixed-script domain\nа (U+0430, CYRILLIC SMALL LETTER A)",
+    )
+    warnings = get_url_warnings([finding])
+    assert len(warnings) >= 2
+
+
+def test_get_url_warnings_multiple_findings():
+    findings = [
+        UrlFinding(
+            raw_url="https://bit.ly/abc",
+            defanged_url="hxxps://bit[.]ly/abc",
+            source="body:plain",
+            depth=0,
+            is_shortener=True,
+        ),
+        UrlFinding(
+            raw_url="https://google.com",
+            defanged_url="hxxps://google[.]com",
+            source="body:plain",
+            depth=0,
+        ),
+        UrlFinding(
+            raw_url="https://xn--pypl-ppa.com",
+            defanged_url="hxxps://xn--pypl-ppa[.]com",
+            source="body:plain",
+            depth=0,
+            is_punycode=True,
+        ),
+    ]
+    warnings = get_url_warnings(findings)
+    assert len(warnings) == 2
+    assert any("shortener" in warning.lower() for warning in warnings)
+    assert any("punycode" in warning.lower() for warning in warnings)
+
+
+def test_get_url_warnings_returns_list():
+    result = get_url_warnings([])
+    assert isinstance(result, list)
+
+
+def test_get_url_warnings_never_raises():
+    try:
+        findings = [
+            UrlFinding(
+                raw_url="",
+                defanged_url="",
+                source="",
+                depth=0,
+            )
+        ]
+        result = get_url_warnings(findings)
+        assert isinstance(result, list)
+    except Exception as exc:
+        pytest.fail(f"get_url_warnings raised unexpectedly: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# GROUP 33: End-to-end detection in process_file output
+# ---------------------------------------------------------------------------
+
+
+def test_urls_txt_no_spurious_warnings_on_clean_email(tmp_path):
+    result = process_file(SAMPLE_PATH, tmp_path)
+    urls_content = (result.output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "⚠ URL shortener" not in urls_content
+    assert "⚠ Punycode" not in urls_content
+    assert "⚠ Suspicious Unicode" not in urls_content
+
+
+def test_summary_warnings_count_includes_url_warnings(tmp_path):
+    result = process_file(SAMPLE_PATH, tmp_path)
+    summary = (result.output_path / "summary.txt").read_text(encoding="utf-8")
+    assert "WARNINGS" in summary
+
+
+def test_urfinding_defaults_are_false():
+    finding = UrlFinding(
+        raw_url="https://example.com",
+        defanged_url="hxxps://example[.]com",
+        source="body:plain",
+        depth=0,
+    )
+    assert finding.is_shortener is False
+    assert finding.is_punycode is False
+    assert finding.homoglyph_detail == ""
+
+
+def test_all_existing_tests_unaffected():
+    for path in [
+        SAMPLE_PATH,
+        NESTED_SAMPLE_PATH,
+        ATTACH_SAMPLE_PATH,
+        MALFORMED_PATH,
+        HTML_ONLY_PATH,
+    ]:
+        email = parse_eml(path)
+        findings = extract_urls(email)
+        warnings = get_url_warnings(findings)
+        assert isinstance(warnings, list)
