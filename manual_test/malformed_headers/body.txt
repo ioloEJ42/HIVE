@@ -1,4 +1,0 @@
-This email has no Date header, no Received headers, no auth results.
-It should still parse cleanly without crashing.
-
-Visit: http://suspicious.org/claim?id=8821

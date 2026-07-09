@@ -1,9 +1,0 @@
-# HIVE URL Extract — html_only.eml
-# Generated : 2026-07-09 18:53:12 UTC
-# All URLs defanged. Sources noted.
-# ─────────────────────────────────────────────
-
-[body:html]
-hxxps://html-mailer[.]net/verify?token=STAFF2024
-hxxps://html-mailer[.]net/track/pixel[.]gif?id=99221
-hxxps://html-mailer[.]net/portal/login

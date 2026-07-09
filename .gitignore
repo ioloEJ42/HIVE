@@ -29,6 +29,7 @@ coverage.xml
 
 # ─── HIVE output ──────────────────────────────────────────
 hive_output/
+manual_test/
 *.log
 
 # ─── Test samples (real emails — never commit these) ──────

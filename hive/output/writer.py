@@ -6,6 +6,8 @@ output folder structure to disk, including recursive nested email output.
 
 from __future__ import annotations
 
+import ipaddress
+import json
 import logging
 import os
 import re
@@ -13,9 +15,11 @@ import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from hive import __version__
 from hive.extractors.attachments import (
+    _format_has_macros,
     build_hashes_csv,
     collect_attachments,
     is_encrypted,
@@ -363,6 +367,203 @@ def _write_summary_txt(
         )
 
 
+def _defang_domain(hostname: str) -> str:
+    """Defang a hostname by bracketing dots."""
+    return hostname.replace(".", "[.]")
+
+
+def _is_ip_address(hostname: str) -> bool:
+    """Return True if hostname is a valid IP address."""
+    try:
+        ipaddress.ip_address(hostname)
+        return True
+    except ValueError:
+        return False
+
+
+def _extract_domains(url_findings: list[UrlFinding]) -> list[str]:
+    """Extract unique defanged domains from URL findings."""
+    domains: set[str] = set()
+    for finding in url_findings:
+        try:
+            hostname = urlparse(finding.raw_url).hostname or ""
+            hostname = hostname.lower().rstrip(".")
+            if not hostname or _is_ip_address(hostname):
+                continue
+            domains.add(_defang_domain(hostname))
+        except Exception:
+            logger.exception("Failed to extract domain from URL finding")
+    return sorted(domains)
+
+
+def _extract_ips(email: ParsedEmail, url_findings: list[UrlFinding]) -> list[str]:
+    """Extract unique defanged IP addresses from hops and URL hostnames."""
+    ips: set[str] = set()
+
+    try:
+        for hop in parse_hop_chain(email):
+            from_ip = hop.get("from_ip", "")
+            if from_ip:
+                ips.add(defang(from_ip))
+    except Exception:
+        logger.exception("Failed to extract IPs from hop chain")
+
+    for finding in url_findings:
+        try:
+            hostname = urlparse(finding.raw_url).hostname or ""
+            if hostname and _is_ip_address(hostname):
+                ips.add(defang(hostname))
+        except Exception:
+            logger.exception("Failed to extract IP from URL finding")
+
+    return sorted(ip for ip in ips if ip)
+
+
+def _build_iocs(
+    email: ParsedEmail,
+    url_findings: list[UrlFinding],
+    attachments: list[Attachment],
+    timestamp: str,
+    analyst: str,
+    host: str,
+) -> dict:
+    """Build the IOC dict for iocs.json. Never raises."""
+    try:
+        level_findings = [
+            finding for finding in url_findings if finding.depth == email.depth
+        ]
+        auth = parse_auth_results(email)
+        url_warnings = get_url_warnings(level_findings)
+        all_warnings = list(email.warnings) + url_warnings
+
+        source_file = str(email.source_file) if str(email.source_file) else "nested email"
+
+        return {
+            "hive_version": __version__,
+            "analysed": timestamp,
+            "analyst": analyst,
+            "host": host,
+            "source_file": source_file,
+            "source_hashes": {
+                "md5": email.source_hash.get("md5", ""),
+                "sha1": email.source_hash.get("sha1", ""),
+                "sha256": email.source_hash.get("sha256", ""),
+            },
+            "email": {
+                "subject": email.subject or "",
+                "from": email.sender or "",
+                "reply_to": email.reply_to or "",
+                "to": list(email.recipients),
+                "date": email.date or "",
+            },
+            "authentication": {
+                "spf": auth.spf.result.lower(),
+                "dkim": auth.dkim.result.lower(),
+                "dmarc": auth.dmarc.result.lower(),
+                "arc": auth.arc.result.lower(),
+            },
+            "urls": [
+                {
+                    "defanged": finding.defanged_url,
+                    "raw": finding.raw_url,
+                    "source": finding.source,
+                    "is_shortener": finding.is_shortener,
+                    "is_punycode": finding.is_punycode,
+                    "homoglyph_detail": finding.homoglyph_detail,
+                }
+                for finding in level_findings
+            ],
+            "domains": _extract_domains(level_findings),
+            "ips": _extract_ips(email, level_findings),
+            "attachments": [
+                {
+                    "filename": attachment.filename,
+                    "original_filename": attachment.original_filename,
+                    "content_type": attachment.content_type,
+                    "size_bytes": attachment.size,
+                    "md5": attachment.hashes.get("md5", ""),
+                    "sha1": attachment.hashes.get("sha1", ""),
+                    "sha256": attachment.hashes.get("sha256", ""),
+                    "has_macros": _format_has_macros(attachment),
+                    "is_encrypted": is_encrypted(attachment),
+                    "is_image": "Image attachment"
+                    in (attachment.macro_details or ""),
+                }
+                for attachment in attachments
+            ],
+            "warnings": all_warnings,
+            "nested_emails": len(email.nested_emails),
+            "depth": email.depth,
+        }
+    except Exception:
+        logger.exception("Failed to build IOC export for email at depth %s", email.depth)
+        return {
+            "hive_version": __version__,
+            "analysed": timestamp,
+            "analyst": analyst,
+            "host": host,
+            "source_file": "",
+            "source_hashes": {"md5": "", "sha1": "", "sha256": ""},
+            "email": {
+                "subject": "",
+                "from": "",
+                "reply_to": "",
+                "to": [],
+                "date": "",
+            },
+            "authentication": {
+                "spf": "",
+                "dkim": "",
+                "dmarc": "",
+                "arc": "",
+            },
+            "urls": [],
+            "domains": [],
+            "ips": [],
+            "attachments": [],
+            "warnings": [],
+            "nested_emails": 0,
+            "depth": email.depth,
+        }
+
+
+def _write_iocs_json(
+    email: ParsedEmail,
+    email_dir: Path,
+    url_findings: list[UrlFinding],
+    attachments: list[Attachment],
+    timestamp: str,
+    analyst: str,
+    host: str,
+) -> None:
+    """Write iocs.json for one email level."""
+    try:
+        content = json.dumps(
+            _build_iocs(
+                email,
+                url_findings,
+                attachments,
+                timestamp,
+                analyst,
+                host,
+            ),
+            indent=2,
+            ensure_ascii=False,
+        )
+    except Exception:
+        logger.exception("Failed to serialise IOC export to JSON")
+        content = json.dumps(
+            {
+                "hive_version": __version__,
+                "analysed": timestamp,
+                "error": "Failed to serialise IOC export",
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    _write_file(email_dir / "iocs.json", content)
+
+
 def _write_attachments(email: ParsedEmail, email_dir: Path, no_extract: bool) -> None:
     """Write attachment files to the attachments/ subdirectory."""
     if no_extract or not email.attachments:
@@ -435,6 +636,8 @@ def _write_email_files(
     email: ParsedEmail,
     email_dir: Path,
     no_extract: bool,
+    analyst: str,
+    host: str,
 ) -> None:
     """Write all standard output files for one email level."""
     timestamp = _utc_timestamp()
@@ -463,6 +666,15 @@ def _write_email_files(
         _write_file(
             email_dir / "summary.txt",
             _write_summary_txt(email, url_findings, attachments, timestamp),
+        )
+        _write_iocs_json(
+            email,
+            email_dir,
+            url_findings,
+            attachments,
+            timestamp,
+            analyst,
+            host,
         )
         _write_attachments(email, email_dir, no_extract)
         _write_zip_contents(email, email_dir, no_extract)
@@ -519,7 +731,9 @@ def write_output(
             email_dir = output_dir
             email_dir.mkdir(parents=True, exist_ok=True)
 
-        _write_email_files(email, email_dir, no_extract)
+        analyst = _analyst_username()
+        host = _host_name()
+        _write_email_files(email, email_dir, no_extract, analyst, host)
 
         for index, nested in enumerate(email.nested_emails, start=1):
             nested_dir = email_dir / f"nested_{index:03d}"
