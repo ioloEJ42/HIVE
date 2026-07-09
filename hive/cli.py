@@ -85,6 +85,16 @@ def _build_parser() -> argparse.ArgumentParser:
         version=f"HIVE {__version__}",
     )
 
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Verify integrity of HIVE source files against manifest",
+    )
+    verify_parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Regenerate the manifest (run at release time)",
+    )
+
     return parser
 
 
@@ -110,6 +120,56 @@ def _print_result(result: ProcessResult, verbose: bool) -> None:
             print(f"     Error: {result.error}")
     except Exception:
         logger.exception("Failed to print process result for %s", result.source)
+
+
+def _run_verify(args: argparse.Namespace) -> None:
+    """Run the integrity verification subcommand."""
+    if args.update:
+        from hive.verify import generate_manifest, write_manifest
+
+        manifest = generate_manifest()
+        write_manifest(manifest)
+        print(f"HIVE integrity manifest updated — {len(manifest)} files")
+        print(f"Manifest: hive/MANIFEST.sha256")
+        sys.exit(0)
+
+    from hive.verify import MANIFEST_PATH, verify_integrity
+
+    result = verify_integrity()
+
+    if not result.manifest_found:
+        print("✘  Manifest not found — run: hive verify --update")
+        sys.exit(1)
+
+    if result.error:
+        print(f"✘  Verification error: {result.error}")
+        sys.exit(1)
+
+    print(f"HIVE integrity check — {result.files_checked} files")
+    print(f"  ✔  {len(result.files_ok)} files verified")
+
+    if result.files_modified:
+        print(f"  ✘  {len(result.files_modified)} files MODIFIED:")
+        for path in result.files_modified:
+            print(f"       {path}")
+
+    if result.files_missing:
+        print(f"  ✘  {len(result.files_missing)} files MISSING:")
+        for path in result.files_missing:
+            print(f"       {path}")
+
+    if result.files_new:
+        print(f"  ℹ  {len(result.files_new)} new files (not in manifest):")
+        for path in result.files_new:
+            print(f"       {path}")
+
+    print("  ─────────────────────────────────────────")
+    if result.passed:
+        print("  ✔  Integrity verified — no modifications detected")
+        sys.exit(0)
+
+    print("  ✘  Integrity check FAILED — files have been modified")
+    sys.exit(1)
 
 
 def _print_summary(results: list[ProcessResult], verbose: bool) -> None:
@@ -148,6 +208,10 @@ def main() -> None:
             format="%(asctime)s UTC | %(levelname)s | %(name)s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
+
+        if args.command == "verify":
+            _run_verify(args)
+            return
 
         if args.command != "parse":
             parser.print_help()

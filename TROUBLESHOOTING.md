@@ -80,3 +80,40 @@ or the ZIP triggered a size/count limit (check hive.log for
 ZIP bomb protection warnings). HIVE limits ZIP extraction to 100 files,
 50 MB total uncompressed size, and 20 MB per file. Nested ZIPs beyond
 --max-depth are also skipped.
+
+## Integrity verification
+
+### Verify HIVE has not been tampered with
+```
+hive verify
+```
+
+### Update the manifest after a new release
+```
+hive verify --update
+```
+
+### "Manifest not found"
+The manifest has not been generated yet. Run:
+```
+hive verify --update
+```
+Then commit hive/MANIFEST.sha256 to version control.
+
+### "N files MODIFIED"
+The listed files have changed since the manifest was generated.
+If this is unexpected, do not use the tool until the changes
+are reviewed. If you made intentional changes, regenerate:
+```
+hive verify --update
+```
+
+### "N files MISSING"
+Source files in the manifest are no longer on disk.
+This may indicate tampering or an incomplete installation.
+Reinstall HIVE from the repository.
+
+### "N new files (not in manifest)"
+Files exist on disk that were not present when the manifest
+was generated. This is informational — not a failure.
+If unexpected, review the new files before use.
