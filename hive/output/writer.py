@@ -239,11 +239,13 @@ def _write_summary_txt(
         lines.extend(["", f"NESTED EMAILS ({len(email.nested_emails)})"])
         if email.nested_emails:
             for index, nested in enumerate(email.nested_emails, start=1):
-                nested_name = (
-                    nested.source_file.name
-                    if str(nested.source_file)
-                    else "embedded message"
-                )
+                if (
+                    nested.source_file in (Path(""), Path("."))
+                    or not nested.source_file.stem
+                ):
+                    nested_name = "embedded message"
+                else:
+                    nested_name = nested.source_file.name
                 lines.append(f"  nested_{index:03d}/ ← {nested_name}")
         else:
             lines.append("  [None]")
