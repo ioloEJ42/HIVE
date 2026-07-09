@@ -7,13 +7,15 @@ output folder structure to disk, including recursive nested email output.
 from __future__ import annotations
 
 import logging
+import os
 import re
+import socket
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from hive import __version__
-from hive.extractors.attachments import build_hashes_csv, collect_attachments
+from hive.extractors.attachments import build_hashes_csv, collect_attachments, is_encrypted
 from hive.extractors.auth import auth_results_to_text, parse_auth_results
 from hive.extractors.body import get_body_html_txt, get_body_txt
 from hive.extractors.headers import defang, get_headers_txt, parse_hop_chain
@@ -29,6 +31,24 @@ _DIR_NAME_UNSAFE_RE = re.compile(r"[^\w.\-]+")
 def _utc_timestamp() -> str:
     """Return the current UTC timestamp as a formatted string."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _analyst_username() -> str:
+    """Return the current system username for audit output."""
+    return (
+        os.environ.get("USERNAME")  # Windows
+        or os.environ.get("USER")  # macOS / Linux
+        or os.environ.get("LOGNAME")  # fallback
+        or "unknown"
+    )
+
+
+def _host_name() -> str:
+    """Return the local hostname for audit output."""
+    try:
+        return socket.gethostname()
+    except Exception:
+        return "unknown"
 
 
 def _sanitise_dir_name(name: str) -> str:
@@ -189,8 +209,12 @@ def _format_attachment_line(attachment: Attachment) -> str:
     line = (
         f"  {attachment.filename} | {attachment.size} bytes | SHA256: {sha256}"
     )
-    if attachment.has_macros is True:
+    if is_encrypted(attachment):
+        line += " | ⚠ ENCRYPTED"
+    elif attachment.has_macros is True:
         line += " | ⚠ MACROS DETECTED"
+    elif "Image attachment" in (attachment.macro_details or ""):
+        line += " | ⚠ IMAGE — CHECK FOR QR CODE"
     elif (
         attachment.has_macros is None
         and attachment.macro_details
@@ -219,6 +243,8 @@ def _write_summary_txt(
             "HIVE - Email Forensic Summary",
             f"Version  : {__version__}",
             f"Analysed : {timestamp}",
+            f"Analyst  : {_analyst_username()}",
+            f"Host     : {_host_name()}",
             "═══════════════════════════════════════════════════════════",
             "",
             "SOURCE FILE",
@@ -400,10 +426,12 @@ def write_output(
                 )
             email_dir.mkdir(parents=True, exist_ok=True)
             handler = _setup_log_handler(email_dir / "hive.log")
+            filename = email.source_file.name if str(email.source_file) else "email"
             logger.info(
-                "HIVE v%s writing forensic output for %s",
+                "HIVE v%s | analyst: %s | writing forensic output for %s",
                 __version__,
-                email.source_file.name if str(email.source_file) else "email",
+                _analyst_username(),
+                filename,
             )
         else:
             email_dir = output_dir

@@ -1,0 +1,8 @@
+# HIVE URL Extract — simple_phishing.eml
+# Generated : 2026-07-09 20:18:05 UTC
+# All URLs defanged. Sources noted.
+# ─────────────────────────────────────────────
+
+[body:plain]
+hxxp://185[.]220[.]101[.]45/invoice/download[.]php?id=4521&token=xK9mPq
+hxxps://supp1ier-portal[.]com/pay/confirm

@@ -1,0 +1,33 @@
+Return-Path: <billing@supp1ier-portal.com>
+Received: from mail.supp1ier-portal.com (mail.supp1ier-portal.com [185.220.101.45])
+        by mx1.protection.outlook.com with SMTP id x9si2834567wmd
+        for <finance@vunhst.nhs.uk>; Thu, 09 Mar 2024 08:51:03 +0000
+Received: from localhost (localhost [127.0.0.1])
+        by mail.supp1ier-portal.com with ESMTP id a1b2c3d4e5
+        for <finance@vunhst.nhs.uk>; Thu, 09 Mar 2024 08:50:58 +0000
+Received-SPF: fail (domain of billing@supp1ier-portal.com does not designate
+        185.220.101.45 as permitted sender)
+        receiver=mx1.protection.outlook.com;
+        client-ip=185.220.101.45;
+        helo=mail.supp1ier-portal.com
+Authentication-Results: mx1.protection.outlook.com;
+        dmarc=fail action=none header.from=supp1ier-portal.com;
+        spf=fail smtp.mailfrom=billing@supp1ier-portal.com;
+        dkim=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=supp1ier-portal.com; s=selector1;
+        h=from:to:subject:date:message-id;
+        bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=;
+        b=INVALIDSIGNATUREFORTESTINGPURPOSESONLY==
+From: "Supplier Billing" <billing@supp1ier-portal.com>
+Reply-To: payments@gmail.com
+To: finance@vunhst.nhs.uk
+CC: accounts@vunhst.nhs.uk
+Subject: URGENT: Invoice #4521 requires your attention
+Date: Thu, 09 Mar 2024 08:51:03 +0000
+Message-ID: <20240309085103.x9si2834567@mail.supp1ier-portal.com>
+MIME-Version: 1.0
+X-Mailer: Microsoft Outlook 16.0
+X-Originating-IP: 185.220.101.45
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
