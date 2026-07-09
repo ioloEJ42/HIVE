@@ -466,6 +466,7 @@ PDF_SAMPLE_PATH = Path(__file__).parent / "samples" / "pdf_attachment.eml"
 DOCX_SAMPLE_PATH = Path(__file__).parent / "samples" / "docx_attachment.eml"
 XLSX_SAMPLE_PATH = Path(__file__).parent / "samples" / "xlsx_attachment.eml"
 PPTX_SAMPLE_PATH = Path(__file__).parent / "samples" / "pptx_attachment.eml"
+RTF_SAMPLE_PATH = Path(__file__).parent / "samples" / "rtf_attachment.eml"
 
 
 @pytest.fixture(scope="module")
@@ -508,6 +509,12 @@ def xlsx_email():
 def pptx_email():
     """Parse the PPTX attachment sample once for reuse across tests."""
     return parse_eml(PPTX_SAMPLE_PATH)
+
+
+@pytest.fixture(scope="module")
+def rtf_email():
+    """Parse the RTF attachment sample once for reuse across tests."""
+    return parse_eml(RTF_SAMPLE_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -1287,3 +1294,86 @@ def test_pptx_process_file_output(tmp_path):
     urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
     assert "malicious-pptx-link" in urls_content
     assert "attachment:slides.pptx" in urls_content
+
+
+# ---------------------------------------------------------------------------
+# GROUP 28: rtf_attachment.eml — RTF URL extraction
+# ---------------------------------------------------------------------------
+
+
+def test_rtf_email_parses(rtf_email):
+    assert rtf_email is not None
+    assert rtf_email.subject == "Q1 RTF Report - Review Required"
+
+
+def test_rtf_has_one_attachment(rtf_email):
+    assert len(rtf_email.attachments) == 1
+
+
+def test_rtf_attachment_filename(rtf_email):
+    assert rtf_email.attachments[0].filename == "report.rtf"
+
+
+def test_rtf_attachment_content_type(rtf_email):
+    assert "rtf" in rtf_email.attachments[0].content_type.lower()
+
+
+def test_rtf_attachment_hashes_populated(rtf_email):
+    attachment = rtf_email.attachments[0]
+    assert attachment.hashes["md5"]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_rtf_attachment_size_nonzero(rtf_email):
+    assert rtf_email.attachments[0].size > 0
+
+
+def test_rtf_body_url_found(rtf_email):
+    findings = extract_urls(rtf_email)
+    body_findings = [finding for finding in findings if finding.source == "body:plain"]
+    assert len(body_findings) >= 1
+    assert any("quarterly-docs" in finding.defanged_url for finding in body_findings)
+
+
+def test_rtf_attachment_urls_found(rtf_email):
+    findings = extract_urls(rtf_email)
+    rtf_findings = [
+        finding for finding in findings if finding.source == "attachment:report.rtf"
+    ]
+    assert len(rtf_findings) >= 2
+
+
+def test_rtf_malicious_url_found(rtf_email):
+    findings = extract_urls(rtf_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("malicious-rtf-link" in url for url in all_urls)
+
+
+def test_rtf_support_url_found(rtf_email):
+    findings = extract_urls(rtf_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("rtf-support" in url for url in all_urls)
+
+
+def test_rtf_total_url_count(rtf_email):
+    findings = extract_urls(rtf_email)
+    assert len(findings) == 3
+
+
+def test_rtf_all_urls_defanged(rtf_email):
+    for finding in extract_urls(rtf_email):
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_rtf_process_file_output(tmp_path):
+    result = process_file(RTF_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.attachment_count == 1
+    assert result.url_count == 3
+    output_path = result.output_path
+    assert (output_path / "attachments" / "report.rtf").exists()
+    urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "malicious-rtf-link" in urls_content
+    assert "attachment:report.rtf" in urls_content

@@ -1,0 +1,26 @@
+Return-Path: <reports@quarterly-docs.com>
+Received: from mail.quarterly-docs.com (mail.quarterly-docs.com [198.51.100.44])
+        by mx1.protection.outlook.com with SMTP id r2si1043567qkd
+        for <finance@vunhst.nhs.uk>; Thu, 14 Mar 2024 10:00:04 +0000
+Received: from localhost (localhost [127.0.0.1])
+        by mail.quarterly-docs.com with ESMTP id t3u4v5w6x7
+        for <finance@vunhst.nhs.uk>; Thu, 14 Mar 2024 10:00:00 +0000
+Received-SPF: fail (domain of reports@quarterly-docs.com does not designate
+        198.51.100.44 as permitted sender)
+        receiver=mx1.protection.outlook.com;
+        client-ip=198.51.100.44;
+        helo=mail.quarterly-docs.com
+Authentication-Results: mx1.protection.outlook.com;
+        dmarc=fail action=none header.from=quarterly-docs.com;
+        spf=fail smtp.mailfrom=reports@quarterly-docs.com;
+        dkim=none
+From: "Quarterly Reports" <reports@quarterly-docs.com>
+Reply-To: reports@quarterly-docs.com
+To: finance@vunhst.nhs.uk
+Subject: Q1 RTF Report - Review Required
+Date: Thu, 14 Mar 2024 10:00:00 +0000
+Message-ID: <20240314100000.rtf1043567@mail.quarterly-docs.com>
+MIME-Version: 1.0
+X-Mailer: SendGrid
+X-Originating-IP: 198.51.100.44
+Content-Type: multipart/mixed; boundary="=_HIVE_RTF_BOUNDARY_001"

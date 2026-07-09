@@ -1,0 +1,41 @@
+═══════════════════════════════════════════════════════════
+HIVE - Email Forensic Summary
+Version  : 1.0.0
+Analysed : 2026-07-09 19:23:33 UTC
+═══════════════════════════════════════════════════════════
+
+SOURCE FILE
+  Path   : /Users/ioloej/Github/HIVE/tests/samples/rtf_attachment.eml
+  MD5    : 7d531c720e82d843ae1830b7b2578ab4
+  SHA256 : f24fe73face4411162104f0ea9d23d12fb67a12c49b9c3943cf38ef2241b00d0
+
+EMAIL METADATA
+  Subject  : Q1 RTF Report - Review Required
+  From     : "Quarterly Reports" <reports@quarterly-docs.com>
+  Reply-To : reports@quarterly-docs.com
+  To       : finance@vunhst.nhs.uk
+  Date     : 2024-03-14 10:00:00 UTC
+
+ROUTING (Received headers, oldest → newest)
+  [1] localhost (127[.]0[.]0[.]1) → mail.quarterly-docs.com  Thu, 14 Mar 2024 10:00:00 +0000
+  [2] mail.quarterly-docs.com (198[.]51[.]100[.]44) → mx1.protection.outlook.com  Thu, 14 Mar 2024 10:00:04 +0000
+
+AUTHENTICATION
+  SPF   : FAIL
+  DKIM  : NONE
+  DMARC : FAIL
+  ARC   : NONE
+
+ATTACHMENTS (1)
+  report.rtf | 212 bytes | SHA256: 158191c59c015aa15921bbeaab9d06291d033ca39d015462245fae38ddf17fdd
+
+NESTED EMAILS (0)
+  [None]
+
+URLS (3 total)
+  hxxps://quarterly-docs[.]com/rtf-report?ref=Q12024  ← body:plain
+  hxxps://malicious-rtf-link[.]com/approve?id=5566  ← attachment:report.rtf
+  hxxp://rtf-support[.]net/help  ← attachment:report.rtf
+
+WARNINGS (0)
+  [None]
