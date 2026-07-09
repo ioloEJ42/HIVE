@@ -1,0 +1,7 @@
+# HIVE URL Extract — malformed_headers.eml
+# Generated : 2026-07-09 18:53:12 UTC
+# All URLs defanged. Sources noted.
+# ─────────────────────────────────────────────
+
+[body:plain]
+hxxp://suspicious[.]org/claim?id=8821

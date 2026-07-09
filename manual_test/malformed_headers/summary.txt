@@ -1,0 +1,38 @@
+═══════════════════════════════════════════════════════════
+HIVE - Email Forensic Summary
+Version  : 1.0.0
+Analysed : 2026-07-09 18:53:12 UTC
+═══════════════════════════════════════════════════════════
+
+SOURCE FILE
+  Path   : /Users/ioloej/Github/HIVE/tests/samples/malformed_headers.eml
+  MD5    : 97f9e025e82977d44b3ac15372dd6821
+  SHA256 : e3d80135d2671337e9ff63b7c1a993f45eec4a0fcce4001ee0f092e702b2d211
+
+EMAIL METADATA
+  Subject  : You have a new message
+  From     : <sender@suspicious.org>
+  Reply-To : [Not present]
+  To       : staff@vunhst.nhs.uk
+  Date     : [Not present]
+
+ROUTING (Received headers, oldest → newest)
+  [No Received headers found]
+
+AUTHENTICATION
+  SPF   : NONE
+  DKIM  : NONE
+  DMARC : NONE
+  ARC   : NONE
+
+ATTACHMENTS (0)
+  [None]
+
+NESTED EMAILS (0)
+  [None]
+
+URLS (1 total)
+  hxxp://suspicious[.]org/claim?id=8821  ← body:plain
+
+WARNINGS (0)
+  [None]

@@ -1,0 +1,12 @@
+# HIVE URL Extract — with_attachment.eml
+# Generated : 2026-07-09 18:53:11 UTC
+# All URLs defanged. Sources noted.
+# ─────────────────────────────────────────────
+
+[body:plain]
+hxxps://budget-docs[.]com/sign?ref=Q12024&token=abc123
+hxxp://budget-docs[.]com/support
+
+[attachment:budget_summary.txt]
+hxxps://budget-docs[.]com/approve?id=9921&auth=xyz789
+hxxp://budget-docs[.]com/helpdesk/open?ticket=4421

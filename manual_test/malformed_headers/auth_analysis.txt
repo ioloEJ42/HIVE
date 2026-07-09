@@ -1,0 +1,22 @@
+# HIVE Authentication Analysis
+# ─────────────────────────────────────────────
+
+SPF
+  Result  : NONE
+  Details : N/A
+  Raw     : N/A
+
+DKIM
+  Result  : NONE
+  Details : N/A
+  Raw     : N/A
+
+DMARC
+  Result  : NONE
+  Details : N/A
+  Raw     : N/A
+
+ARC
+  Result  : NONE
+  Details : N/A
+  Raw     : N/A

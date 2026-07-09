@@ -1,0 +1,42 @@
+═══════════════════════════════════════════════════════════
+HIVE - Email Forensic Summary
+Version  : 1.0.0
+Analysed : 2026-07-09 18:53:11 UTC
+═══════════════════════════════════════════════════════════
+
+SOURCE FILE
+  Path   : /Users/ioloej/Github/HIVE/tests/samples/with_attachment.eml
+  MD5    : 028e1de3a7114e9217e33fd06ddd3a6d
+  SHA256 : 401369687070e57a3e0ffa5f14cc8badbde3b9196857c7e5223f5b11ae3fb9ba
+
+EMAIL METADATA
+  Subject  : Q1 2024 Budget Summary - Action Required
+  From     : "Budget Documents" <invoices@budget-docs.com>
+  Reply-To : invoices@budget-docs.com
+  To       : finance@vunhst.nhs.uk
+  Date     : 2024-03-11 14:05:22 UTC
+
+ROUTING (Received headers, oldest → newest)
+  [1] localhost (127[.]0[.]0[.]1) → mail.budget-docs.com  Mon, 11 Mar 2024 14:05:18 +0000
+  [2] mail.budget-docs.com (45[.]33[.]32[.]156) → mx1.protection.outlook.com  Mon, 11 Mar 2024 14:05:22 +0000
+
+AUTHENTICATION
+  SPF   : FAIL
+  DKIM  : NONE
+  DMARC : FAIL
+  ARC   : NONE
+
+ATTACHMENTS (1)
+  budget_summary.txt | 308 bytes | SHA256: 76cf4574a3a337c29549d06685b45c84efa0a0b9282833b827a1484a26a58670
+
+NESTED EMAILS (0)
+  [None]
+
+URLS (4 total)
+  hxxps://budget-docs[.]com/sign?ref=Q12024&token=abc123  ← body:plain
+  hxxp://budget-docs[.]com/support  ← body:plain
+  hxxps://budget-docs[.]com/approve?id=9921&auth=xyz789  ← attachment:budget_summary.txt
+  hxxp://budget-docs[.]com/helpdesk/open?ticket=4421  ← attachment:budget_summary.txt
+
+WARNINGS (0)
+  [None]
