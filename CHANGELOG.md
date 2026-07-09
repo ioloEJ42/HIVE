@@ -5,6 +5,27 @@ Semantic versioning is used: MAJOR.MINOR.PATCH
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-07-09
+
+### Added
+
+- **Analyst attribution** — analyst username (from environment) and hostname recorded in hive.log and summary.txt for chain of custody
+- **Password-protected attachment detection** — ZIP (bit flag), PDF (/Encrypt), Office Open XML (EncryptedPackage), legacy OLE2; flagged in summary.txt and hashes.csv before VBA scan is attempted
+- **Image attachment flagging** — PNG, JPEG, GIF, BMP, WEBP, TIFF detected via content-type, extension, and magic bytes; flagged with QR code advisory in summary.txt
+- **ZIP extraction** — recursive content analysis via stdlib zipfile; URL extraction from contained documents; macro and image detection on ZIP entries; nested ZIP recursion up to max_depth; ZIP bomb protection (100 file / 50MB total / 20MB per file limits); contents written to attachments/zip_contents/<name>/; source labels show attachment:<zip>/zip:<entry>
+- **iocs.json** — structured machine-readable IOC export per email level; contains analyst/host attribution, email metadata, authentication results, defanged URLs with shortener/punycode/homoglyph flags, extracted domains and IPs, attachment hashes, and warnings; ensure_ascii=False preserves Unicode characters
+- **Integrity verification** — `hive verify` checks SHA256 hashes of all 17 source files against hive/MANIFEST.sha256; `hive verify --update` regenerates the manifest at release time; detects modified, missing, and new files
+- **QUICKSTART.md** — one-page analyst command reference
+- **INSTALL.md** — step-by-step Windows installation guide
+- **TROUBLESHOOTING.md** — common issues covering installation, parsing, attachments, output, performance, and integrity verification
+
+### Changed
+
+- hashes.csv has_macros column gains two new values: "encrypted" and "image" (alongside existing yes/no/unknown)
+- summary.txt ATTACHMENTS section shows ⚠ ENCRYPTED and ⚠ IMAGE — CHECK FOR QR CODE flags
+- summary.txt includes Analyst and Host fields in the header block
+- hive.log entries include analyst username
+
 ## [1.1.0] - 2026-07-09
 
 ### Added

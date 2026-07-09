@@ -14,6 +14,7 @@ hive_output/
     ├── urls.txt             # all URLs, defanged, with source labels
     ├── hashes.csv           # attachment hashes (MD5/SHA1/SHA256)
     ├── summary.txt          # analyst-ready forensic overview
+    ├── iocs.json            # structured IOC export (JSON)
     ├── hive.log             # audit log (UTC timestamps)
     └── attachments/         # extracted attachment files
         └── ...
@@ -39,6 +40,12 @@ hive_output/
 - Offline capable, with no network calls in V1
 - Path traversal protection on all attachment filenames
 - Audit log with UTC timestamps
+- Password-protected attachment detection (ZIP, PDF, Office, OLE2)
+- Image attachment flagging with QR code advisory
+- ZIP extraction with recursive content and URL analysis
+- Structured IOC export (iocs.json) per email level
+- Integrity verification (`hive verify`) — SHA256 manifest of all source files
+- Analyst username and hostname recorded in audit log
 
 ## Installation
 
@@ -135,8 +142,8 @@ pip install pytest
 pytest tests/ -v
 ```
 
-194 tests across 28 groups covering parsing, extraction, authentication analysis, defanging, safety checks, batch processing, evidence integrity, and URL extraction from PDF, DOCX, XLSX, PPTX, and RTF attachments.
+290 tests across 35 groups covering parsing, extraction, authentication analysis, defanging, safety checks, batch processing, evidence integrity, URL extraction from PDF, DOCX, XLSX, PPTX, and RTF attachments, ZIP extraction, and integrity verification.
 
 ## Version
 
-1.0.0: initial release
+1.2.0 — current release
