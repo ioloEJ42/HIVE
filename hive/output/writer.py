@@ -57,24 +57,28 @@ def _unique_dir(base: Path) -> Path:
 
 
 def _setup_log_handler(log_path: Path) -> logging.FileHandler:
-    """Create and attach a UTF-8 FileHandler on the root logger."""
+    """Create and attach a UTF-8 FileHandler on the hive package logger."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+    handler.setLevel(logging.INFO)
     formatter = logging.Formatter(
         "%(asctime)s UTC | %(levelname)s | %(name)s | %(message)s"
     )
     formatter.converter = time.gmtime
     handler.setFormatter(formatter)
-    logging.getLogger().addHandler(handler)
+    hive_logger = logging.getLogger("hive")
+    if hive_logger.getEffectiveLevel() > logging.INFO:
+        hive_logger.setLevel(logging.INFO)
+    hive_logger.addHandler(handler)
     return handler
 
 
 def _teardown_log_handler(handler: logging.FileHandler) -> None:
-    """Flush, close, and remove a FileHandler from the root logger."""
+    """Flush, close, and remove a FileHandler from the hive package logger."""
     try:
         handler.flush()
         handler.close()
-        logging.getLogger().removeHandler(handler)
+        logging.getLogger("hive").removeHandler(handler)
     except Exception:
         logger.exception("Failed to tear down log handler")
 
@@ -367,6 +371,11 @@ def write_output(
                 )
             email_dir.mkdir(parents=True, exist_ok=True)
             handler = _setup_log_handler(email_dir / "hive.log")
+            logger.info(
+                "HIVE v%s writing forensic output for %s",
+                __version__,
+                email.source_file.name if str(email.source_file) else "email",
+            )
         else:
             email_dir = output_dir
             email_dir.mkdir(parents=True, exist_ok=True)

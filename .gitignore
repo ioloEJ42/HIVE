@@ -40,6 +40,10 @@ tests/samples/*.xlsx
 
 # ─── Synthetic test samples (safe to commit) ──────────────
 !tests/samples/simple_phishing.eml
+!tests/samples/nested_email.eml
+!tests/samples/with_attachment.eml
+!tests/samples/malformed_headers.eml
+!tests/samples/html_only.eml
 
 # ─── macOS ────────────────────────────────────────────────
 .DS_Store

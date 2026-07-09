@@ -453,3 +453,485 @@ def test_nested_urls_txt_contains_inner_urls(tmp_path):
     inner_urls = (nested_dirs[0] / "urls.txt").read_text(encoding="utf-8")
     assert "secure-login-portal" in inner_urls
     assert "hxxp" in inner_urls or "hxxps" in inner_urls
+
+
+import shutil
+
+from hive.batch import process_directory
+
+ATTACH_SAMPLE_PATH = Path(__file__).parent / "samples" / "with_attachment.eml"
+MALFORMED_PATH = Path(__file__).parent / "samples" / "malformed_headers.eml"
+HTML_ONLY_PATH = Path(__file__).parent / "samples" / "html_only.eml"
+
+
+@pytest.fixture(scope="module")
+def attach_email():
+    """Parse the attachment sample once for reuse across tests."""
+    return parse_eml(ATTACH_SAMPLE_PATH)
+
+
+@pytest.fixture(scope="module")
+def malformed_email():
+    """Parse the malformed headers sample once for reuse across tests."""
+    return parse_eml(MALFORMED_PATH)
+
+
+@pytest.fixture(scope="module")
+def html_only_email():
+    """Parse the HTML-only sample once for reuse across tests."""
+    return parse_eml(HTML_ONLY_PATH)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 14: with_attachment.eml — attachment pipeline
+# ---------------------------------------------------------------------------
+
+
+def test_attach_email_parses(attach_email):
+    assert attach_email is not None
+    assert attach_email.subject == "Q1 2024 Budget Summary - Action Required"
+
+
+def test_attach_email_has_one_attachment(attach_email):
+    assert len(attach_email.attachments) == 1
+
+
+def test_attach_filename_sanitised(attach_email):
+    attachment = attach_email.attachments[0]
+    assert attachment.filename == "budget_summary.txt"
+    assert attachment.original_filename == "budget_summary.txt"
+
+
+def test_attach_hashes_populated(attach_email):
+    attachment = attach_email.attachments[0]
+    assert attachment.hashes["md5"]
+    assert attachment.hashes["sha1"]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_attach_size_nonzero(attach_email):
+    attachment = attach_email.attachments[0]
+    assert attachment.size > 0
+
+
+def test_attach_content_type(attach_email):
+    attachment = attach_email.attachments[0]
+    assert "text" in attachment.content_type.lower()
+
+
+def test_attach_has_macros_none_for_txt(attach_email):
+    attachment = attach_email.attachments[0]
+    assert attachment.has_macros is None
+
+
+def test_attach_body_urls_found(attach_email):
+    findings = extract_urls(attach_email)
+    body_findings = [finding for finding in findings if finding.source == "body:plain"]
+    assert len(body_findings) >= 2
+
+
+def test_attach_attachment_urls_found(attach_email):
+    findings = extract_urls(attach_email)
+    attachment_findings = [
+        finding for finding in findings if finding.source == "attachment:budget_summary.txt"
+    ]
+    assert len(attachment_findings) >= 2
+
+
+def test_attach_all_urls_defanged(attach_email):
+    for finding in extract_urls(attach_email):
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_attach_hashes_csv_has_row(attach_email):
+    attachments = collect_attachments(attach_email)
+    csv_output = build_hashes_csv(attachments)
+    lines = csv_output.strip().split("\n")
+    assert len(lines) == 2
+    assert "budget_summary.txt" in csv_output
+
+
+def test_attach_collect_attachments_count(attach_email):
+    attachments = collect_attachments(attach_email)
+    assert len(attachments) == 1
+
+
+def test_attach_spf_fail(attach_email):
+    assert parse_auth_results(attach_email).spf.result == "fail"
+
+
+def test_attach_no_reply_to_mismatch(attach_email):
+    assert "Reply-To does not match From domain" not in attach_email.warnings
+
+
+def test_attach_process_file_output(tmp_path):
+    result = process_file(ATTACH_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.attachment_count == 1
+    assert result.url_count >= 4
+    output_path = result.output_path
+    assert (output_path / "hashes.csv").exists()
+    assert (output_path / "attachments" / "budget_summary.txt").exists()
+
+
+def test_attach_no_extract_flag(tmp_path):
+    result = process_file(ATTACH_SAMPLE_PATH, tmp_path, no_extract=True)
+    assert result.success is True
+    assert not (result.output_path / "attachments").exists()
+    assert (result.output_path / "hashes.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# GROUP 15: malformed_headers.eml — resilience
+# ---------------------------------------------------------------------------
+
+
+def test_malformed_parses_without_crash(malformed_email):
+    assert malformed_email is not None
+
+
+def test_malformed_subject_present(malformed_email):
+    assert malformed_email.subject == "You have a new message"
+
+
+def test_malformed_sender_present(malformed_email):
+    assert "suspicious.org" in malformed_email.sender
+
+
+def test_malformed_date_empty_or_string(malformed_email):
+    assert isinstance(malformed_email.date, str)
+
+
+def test_malformed_no_received_headers(malformed_email):
+    hops = parse_hop_chain(malformed_email)
+    assert hops == []
+
+
+def test_malformed_auth_results_default(malformed_email):
+    results = parse_auth_results(malformed_email)
+    assert results.spf.result == "none"
+    assert results.dkim.result == "none"
+    assert results.dmarc.result == "none"
+    assert results.arc.result == "none"
+
+
+def test_malformed_body_still_extracted(malformed_email):
+    assert malformed_email.body_plain is not None
+    assert "suspicious.org" in malformed_email.body_plain
+
+
+def test_malformed_url_still_found(malformed_email):
+    findings = extract_urls(malformed_email)
+    assert len(findings) >= 1
+    assert any("suspicious" in finding.defanged_url for finding in findings)
+
+
+def test_malformed_headers_raw_nonempty(malformed_email):
+    assert malformed_email.headers_raw
+    assert "From" in malformed_email.headers_raw
+
+
+def test_malformed_source_hash_populated(malformed_email):
+    assert malformed_email.source_hash["sha256"]
+
+
+def test_malformed_process_file_succeeds(tmp_path):
+    result = process_file(MALFORMED_PATH, tmp_path)
+    assert result.success is True
+    output_path = result.output_path
+    assert (output_path / "headers.txt").exists()
+    assert (output_path / "summary.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# GROUP 16: html_only.eml — HTML body handling
+# ---------------------------------------------------------------------------
+
+
+def test_html_only_parses(html_only_email):
+    assert html_only_email is not None
+
+
+def test_html_only_body_plain_is_none(html_only_email):
+    assert html_only_email.body_plain is None
+
+
+def test_html_only_body_html_present(html_only_email):
+    assert html_only_email.body_html is not None
+    assert "<html>" in html_only_email.body_html.lower()
+
+
+def test_html_only_body_txt_fallback(html_only_email):
+    result = get_body_txt(html_only_email)
+    assert "[Plain text body not available — extracted from HTML]" in result
+    assert "verify" in result.lower()
+
+
+def test_html_only_body_txt_no_script_content(html_only_email):
+    result = get_body_txt(html_only_email)
+    assert "window.onload" not in result
+    assert "<script>" not in result
+
+
+def test_html_only_body_txt_no_style_content(html_only_email):
+    result = get_body_txt(html_only_email)
+    assert "font-family" not in result
+    assert "<style>" not in result
+
+
+def test_html_only_body_html_txt_has_safety_header(html_only_email):
+    result = get_body_html_txt(html_only_email)
+    assert "DO NOT OPEN THIS FILE IN A BROWSER" in result
+    assert "DO NOT CLICK ANY LINKS" in result
+
+
+def test_html_only_body_html_txt_contains_raw_html(html_only_email):
+    result = get_body_html_txt(html_only_email)
+    assert "<html>" in result.lower()
+    assert "window.onload" in result
+
+
+def test_html_only_urls_from_href(html_only_email):
+    findings = extract_urls(html_only_email)
+    defanged_urls = [finding.defanged_url for finding in findings]
+    assert any("html-mailer" in url for url in defanged_urls)
+
+
+def test_html_only_urls_defanged(html_only_email):
+    for finding in extract_urls(html_only_email):
+        assert not finding.defanged_url.startswith("http")
+
+
+def test_html_only_spf_pass(html_only_email):
+    assert parse_auth_results(html_only_email).spf.result == "pass"
+
+
+def test_html_only_dkim_pass(html_only_email):
+    assert parse_auth_results(html_only_email).dkim.result == "pass"
+
+
+def test_html_only_dmarc_pass(html_only_email):
+    assert parse_auth_results(html_only_email).dmarc.result == "pass"
+
+
+# ---------------------------------------------------------------------------
+# GROUP 17: defang edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_defang_empty_string():
+    assert defang("") == ""
+
+
+def test_defang_already_defanged():
+    assert defang("hxxp://evil[.]com") == "hxxp://evil[.]com"
+
+
+def test_defang_ftp():
+    assert defang("ftp://files.evil.com/payload") == "fxxp://files[.]evil[.]com/payload"
+
+
+def test_defang_multiple_urls_in_one_string():
+    text = "See http://evil.com and also https://bad.net/path"
+    result = defang(text)
+    assert "hxxp://evil[.]com" in result
+    assert "hxxps://bad[.]net/path" in result
+
+
+def test_defang_url_with_port():
+    result = defang("http://evil.com:8080/path")
+    assert result.startswith("hxxp://")
+    assert "[.]" in result
+
+
+def test_defang_ip_in_url():
+    result = defang("http://192.168.1.1/admin")
+    assert result.startswith("hxxp://")
+    assert "192" in result
+
+
+def test_defang_bare_ip_not_in_url():
+    result = defang("Sender IP: 10.0.0.1")
+    assert "10[.]0[.]0[.]1" in result
+
+
+def test_defang_no_false_positive_version_numbers():
+    result = defang("Python 3.10.4 is installed")
+    assert result == "Python 3.10.4 is installed"
+
+
+# ---------------------------------------------------------------------------
+# GROUP 18: sanitise_filename edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_sanitise_windows_reserved_name():
+    result = sanitise_filename("CON.txt")
+    assert result is not None
+    assert len(result) > 0
+
+
+def test_sanitise_very_long_filename():
+    long_name = "a" * 300 + ".exe"
+    result = sanitise_filename(long_name)
+    assert len(result) <= 200
+
+
+def test_sanitise_unicode_filename():
+    result = sanitise_filename("ñoño_attachment.pdf")
+    assert result is not None
+    assert len(result) > 0
+
+
+def test_sanitise_only_dots():
+    result = sanitise_filename("...")
+    assert result == "unnamed_attachment"
+
+
+def test_sanitise_only_unsafe_chars():
+    result = sanitise_filename("***???<<<")
+    assert result == "unnamed_attachment" or len(result) > 0
+
+
+def test_sanitise_mixed_separators():
+    result = sanitise_filename("..\\..\\windows\\system32\\evil.exe")
+    assert "windows" not in result.lower()
+    assert "system32" not in result.lower()
+    assert result.endswith(".exe") or result == "evil.exe"
+
+
+def test_sanitise_null_bytes():
+    result = sanitise_filename("evil\x00file.exe")
+    assert "\x00" not in result
+
+
+# ---------------------------------------------------------------------------
+# GROUP 19: process_directory
+# ---------------------------------------------------------------------------
+
+
+def test_process_directory_with_multiple_files(tmp_path):
+    samples_dir = tmp_path / "samples"
+    samples_dir.mkdir()
+    shutil.copy(SAMPLE_PATH, samples_dir / SAMPLE_PATH.name)
+    shutil.copy(MALFORMED_PATH, samples_dir / MALFORMED_PATH.name)
+    results = process_directory(samples_dir, tmp_path / "output")
+    assert len(results) == 2
+    assert all(result.success for result in results)
+
+
+def test_process_directory_empty(tmp_path):
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+    results = process_directory(empty_dir, tmp_path / "output")
+    assert results == []
+
+
+def test_process_directory_ignores_non_email_files(tmp_path):
+    mixed_dir = tmp_path / "mixed"
+    mixed_dir.mkdir()
+    shutil.copy(SAMPLE_PATH, mixed_dir / SAMPLE_PATH.name)
+    (mixed_dir / "readme.txt").write_text("not an email", encoding="utf-8")
+    (mixed_dir / "image.png").write_bytes(b"\x89PNG\r\n")
+    results = process_directory(mixed_dir, tmp_path / "output")
+    assert len(results) == 1
+    assert results[0].success is True
+
+
+def test_process_directory_invalid_path(tmp_path):
+    results = process_directory(tmp_path / "nonexistent", tmp_path / "output")
+    assert len(results) == 1
+    assert results[0].success is False
+
+
+# ---------------------------------------------------------------------------
+# GROUP 20: output collision handling
+# ---------------------------------------------------------------------------
+
+
+def test_output_dir_collision(tmp_path):
+    result1 = process_file(SAMPLE_PATH, tmp_path)
+    result2 = process_file(SAMPLE_PATH, tmp_path)
+    assert result1.output_path is not None
+    assert result2.output_path is not None
+    assert result1.output_path.is_dir()
+    assert result1.output_path != result2.output_path
+    assert result1.output_path.exists()
+    assert result2.output_path.exists()
+    assert result2.output_path.name.endswith("_1")
+
+
+# ---------------------------------------------------------------------------
+# GROUP 21: evidence integrity
+# ---------------------------------------------------------------------------
+
+
+def test_source_hash_is_deterministic():
+    email1 = parse_eml(SAMPLE_PATH)
+    email2 = parse_eml(SAMPLE_PATH)
+    assert email1.source_hash == email2.source_hash
+
+
+def test_source_hash_differs_for_different_files():
+    email1 = parse_eml(SAMPLE_PATH)
+    email2 = parse_eml(MALFORMED_PATH)
+    assert email1.source_hash["sha256"] != email2.source_hash["sha256"]
+
+
+def test_source_hash_in_summary_txt(tmp_path):
+    result = process_file(SAMPLE_PATH, tmp_path)
+    summary = (result.output_path / "summary.txt").read_text(encoding="utf-8")
+    email = parse_eml(SAMPLE_PATH)
+    assert email.source_hash["sha256"] in summary
+    assert email.source_hash["md5"] in summary
+
+
+# ---------------------------------------------------------------------------
+# GROUP 22: hive.log
+# ---------------------------------------------------------------------------
+
+
+def test_hive_log_created(tmp_path):
+    result = process_file(SAMPLE_PATH, tmp_path)
+    assert (result.output_path / "hive.log").exists()
+
+
+def test_hive_log_not_empty(tmp_path):
+    result = process_file(SAMPLE_PATH, tmp_path)
+    log_content = (result.output_path / "hive.log").read_text(encoding="utf-8")
+    assert len(log_content) > 0
+
+
+def test_hive_log_contains_utc(tmp_path):
+    result = process_file(SAMPLE_PATH, tmp_path)
+    log_content = (result.output_path / "hive.log").read_text(encoding="utf-8")
+    assert "UTC" in log_content
+
+
+# ---------------------------------------------------------------------------
+# GROUP 23: auth_results_to_text formatting
+# ---------------------------------------------------------------------------
+
+
+def test_auth_text_all_four_protocols_present():
+    results = parse_auth_results(parse_eml(SAMPLE_PATH))
+    text = auth_results_to_text(results)
+    assert "SPF" in text
+    assert "DKIM" in text
+    assert "DMARC" in text
+    assert "ARC" in text
+
+
+def test_auth_text_results_uppercase():
+    results = parse_auth_results(parse_eml(SAMPLE_PATH))
+    text = auth_results_to_text(results)
+    assert "FAIL" in text
+    assert "NONE" in text
+
+
+def test_auth_text_pass_for_html_only():
+    results = parse_auth_results(parse_eml(HTML_ONLY_PATH))
+    text = auth_results_to_text(results)
+    assert "PASS" in text
