@@ -44,6 +44,9 @@ tests/samples/*.xlsx
 !tests/samples/with_attachment.eml
 !tests/samples/malformed_headers.eml
 !tests/samples/html_only.eml
+!tests/samples/pdf_attachment.eml
+!tests/samples/test_attachment.pdf
+!tests/create_test_pdf.py
 
 # ─── macOS ────────────────────────────────────────────────
 .DS_Store

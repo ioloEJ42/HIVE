@@ -462,6 +462,7 @@ from hive.batch import process_directory
 ATTACH_SAMPLE_PATH = Path(__file__).parent / "samples" / "with_attachment.eml"
 MALFORMED_PATH = Path(__file__).parent / "samples" / "malformed_headers.eml"
 HTML_ONLY_PATH = Path(__file__).parent / "samples" / "html_only.eml"
+PDF_SAMPLE_PATH = Path(__file__).parent / "samples" / "pdf_attachment.eml"
 
 
 @pytest.fixture(scope="module")
@@ -480,6 +481,12 @@ def malformed_email():
 def html_only_email():
     """Parse the HTML-only sample once for reuse across tests."""
     return parse_eml(HTML_ONLY_PATH)
+
+
+@pytest.fixture(scope="module")
+def pdf_email():
+    """Parse the PDF attachment sample once for reuse across tests."""
+    return parse_eml(PDF_SAMPLE_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -935,3 +942,93 @@ def test_auth_text_pass_for_html_only():
     results = parse_auth_results(parse_eml(HTML_ONLY_PATH))
     text = auth_results_to_text(results)
     assert "PASS" in text
+
+
+# ---------------------------------------------------------------------------
+# GROUP 24: pdf_attachment.eml — PDF URL extraction
+# ---------------------------------------------------------------------------
+
+
+def test_pdf_email_parses(pdf_email):
+    assert pdf_email is not None
+    assert pdf_email.subject == "Q1 Financial Report - Review Required"
+
+
+def test_pdf_email_has_one_attachment(pdf_email):
+    assert len(pdf_email.attachments) == 1
+
+
+def test_pdf_attachment_filename(pdf_email):
+    assert pdf_email.attachments[0].filename == "report.pdf"
+
+
+def test_pdf_attachment_content_type(pdf_email):
+    assert "pdf" in pdf_email.attachments[0].content_type.lower()
+
+
+def test_pdf_attachment_hashes_populated(pdf_email):
+    attachment = pdf_email.attachments[0]
+    assert attachment.hashes["md5"]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_pdf_attachment_size_nonzero(pdf_email):
+    assert pdf_email.attachments[0].size > 0
+
+
+def test_pdf_body_url_found(pdf_email):
+    findings = extract_urls(pdf_email)
+    body_findings = [finding for finding in findings if finding.source == "body:plain"]
+    assert len(body_findings) >= 1
+    assert any("quarterly-docs" in finding.defanged_url for finding in body_findings)
+
+
+def test_pdf_attachment_urls_found(pdf_email):
+    findings = extract_urls(pdf_email)
+    pdf_findings = [finding for finding in findings if finding.source == "attachment:report.pdf"]
+    assert len(pdf_findings) >= 2
+
+
+def test_pdf_attachment_urls_defanged(pdf_email):
+    findings = extract_urls(pdf_email)
+    pdf_findings = [finding for finding in findings if finding.source == "attachment:report.pdf"]
+    for finding in pdf_findings:
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_pdf_malicious_url_found(pdf_email):
+    findings = extract_urls(pdf_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("malicious-pdf-link" in url for url in all_urls)
+
+
+def test_pdf_support_url_found(pdf_email):
+    findings = extract_urls(pdf_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("pdf-support" in url for url in all_urls)
+
+
+def test_pdf_total_url_count(pdf_email):
+    findings = extract_urls(pdf_email)
+    assert len(findings) == 3
+
+
+def test_pdf_spf_fail(pdf_email):
+    assert parse_auth_results(pdf_email).spf.result == "fail"
+
+
+def test_pdf_process_file_output(tmp_path):
+    result = process_file(PDF_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.attachment_count == 1
+    assert result.url_count == 3
+    output_path = result.output_path
+    assert (output_path / "attachments" / "report.pdf").exists()
+    assert (output_path / "hashes.csv").exists()
+    csv_content = (output_path / "hashes.csv").read_text(encoding="utf-8")
+    assert "report.pdf" in csv_content
+    urls_content = (output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "malicious-pdf-link" in urls_content
+    assert "attachment:report.pdf" in urls_content

@@ -1,0 +1,63 @@
+Return-Path: <reports@quarterly-docs.com>
+Received: from mail.quarterly-docs.com (mail.quarterly-docs.com [198.51.100.44])
+        by mx1.protection.outlook.com with SMTP id q9si8821345qkd
+        for <finance@vunhst.nhs.uk>; Tue, 12 Mar 2024 09:15:33 +0000
+Received: from localhost (localhost [127.0.0.1])
+        by mail.quarterly-docs.com with ESMTP id r1s2t3u4v5
+        for <finance@vunhst.nhs.uk>; Tue, 12 Mar 2024 09:15:29 +0000
+Received-SPF: fail (domain of reports@quarterly-docs.com does not designate
+        198.51.100.44 as permitted sender)
+        receiver=mx1.protection.outlook.com;
+        client-ip=198.51.100.44;
+        helo=mail.quarterly-docs.com
+Authentication-Results: mx1.protection.outlook.com;
+        dmarc=fail action=none header.from=quarterly-docs.com;
+        spf=fail smtp.mailfrom=reports@quarterly-docs.com;
+        dkim=none
+From: "Quarterly Reports" <reports@quarterly-docs.com>
+Reply-To: reports@quarterly-docs.com
+To: finance@vunhst.nhs.uk
+Subject: Q1 Financial Report - Review Required
+Date: Tue, 12 Mar 2024 09:15:33 +0000
+Message-ID: <20240312091533.q9si8821345@mail.quarterly-docs.com>
+MIME-Version: 1.0
+X-Mailer: SendGrid
+X-Originating-IP: 198.51.100.44
+Content-Type: multipart/mixed; boundary="=_HIVE_PDF_BOUNDARY_001"
+
+--=_HIVE_PDF_BOUNDARY_001
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+Dear Finance Team,
+
+Please find attached the Q1 financial report for your review.
+
+If the attachment does not open, use this link:
+https://quarterly-docs.com/report?ref=Q12024
+
+Regards,
+Quarterly Reports Team
+
+--=_HIVE_PDF_BOUNDARY_001
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="report.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2Jq
+CjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2Jq
+CjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIg
+NzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4g
+Pj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCAyNTcgPj4Kc3RyZWFtCkJUIC9GMSAxMiBU
+ZiA1MCA3NTAgVGQgKFBsZWFzZSByZXZpZXcgdGhlIGZvbGxvd2luZyBkb2N1bWVudCBhbmQgY2xp
+Y2sgdGhlIGxpbmsgdG8gcHJvY2VlZDopIFRqIEVUCkJUIC9GMSAxMiBUZiA1MCA3MzIgVGQgKGh0
+dHBzOi8vbWFsaWNpb3VzLXBkZi1saW5rLmNvbS9wYXlsb2FkP2lkPTk5MjEpIFRqIEVUCkJUIC9G
+MSAxMiBUZiA1MCA3MTQgVGQgKEZvciBzdXBwb3J0IGNvbnRhY3Q6IGh0dHA6Ly9wZGYtc3VwcG9y
+dC5uZXQvaGVscCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250
+IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKeHJlZgowIDYK
+MDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAg
+biAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDA1NDggMDAw
+MDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo2MTgKJSVF
+T0YK
+
+--=_HIVE_PDF_BOUNDARY_001--
