@@ -1,6 +1,6 @@
-# HIVE — Header, Indicator & Vector Examiner
+# HIVE: Header, Indicator & Vector Examiner
 
-HIVE is an offline email forensics and triage tool for security analysts. It parses `.eml` and `.msg` files and produces structured forensic output — headers, authentication results, body content, defanged URLs, attachment hashes, and extracted files — without making network calls. It is designed for phishing triage in NHS and hospital security teams who need repeatable, evidence-grade analysis on isolated workstations.
+HIVE is an offline email forensics and triage tool for security analysts. It parses `.eml` and `.msg` files and produces structured forensic output: headers, authentication results, body content, defanged URLs, attachment hashes, and extracted files, all without making network calls. Built for phishing triage, it gives analysts repeatable, evidence-grade output without touching the network or executing any content.
 
 ## What HIVE produces
 
@@ -33,7 +33,7 @@ hive_output/
 - Input file hashing for evidence integrity
 - Batch processing (directory of emails)
 - `--no-extract` flag (hashes only, no files written to disk)
-- Offline capable — no network calls in V1
+- Offline capable, with no network calls in V1
 - Path traversal protection on all attachment filenames
 - Audit log with UTC timestamps
 
@@ -110,7 +110,7 @@ hive parse ./inbox/ -o ./output
 
 ## Safety design
 
-HIVE parses attacker-controlled email content and must be treated accordingly. All parsing uses pure Python libraries — nothing in the email body or attachments is executed, and no Office applications are invoked. V1 makes no network calls; authentication results are read from stamped headers only, with no live DNS lookups. Attachment filenames are sanitised before writing to disk to prevent path traversal. HTML bodies are saved as `.html.txt` with a safety header to reduce the risk of accidental browser execution. Recursion depth and input file size limits are enforced to contain resource abuse. Every input file is hashed (MD5, SHA1, SHA256) at parse time for evidence integrity.
+HIVE parses attacker-controlled email content and must be treated accordingly. All parsing uses pure Python libraries. Nothing in the email body or attachments is executed, and no Office applications are invoked. V1 makes no network calls; authentication results are read from stamped headers only, with no live DNS lookups. Attachment filenames are sanitised before writing to disk to prevent path traversal. HTML bodies are saved as `.html.txt` with a safety header to reduce the risk of accidental browser execution. Recursion depth and input file size limits are enforced to contain resource abuse. Every input file is hashed (MD5, SHA1, SHA256) at parse time for evidence integrity.
 
 ## Dependencies
 
@@ -136,4 +136,4 @@ pytest tests/ -v
 
 ## Version
 
-1.0.0 — initial release
+1.0.0: initial release
