@@ -262,3 +262,194 @@ def test_process_file_output_files_exist(tmp_path):
     assert (output_path / "auth_analysis.txt").exists()
     assert (output_path / "body.txt").exists()
     assert (output_path / "body.html.txt").exists()
+
+
+NESTED_SAMPLE_PATH = Path(__file__).parent / "samples" / "nested_email.eml"
+
+
+@pytest.fixture(scope="module")
+def nested_email():
+    """Parse the nested email sample once for reuse across tests."""
+    return parse_eml(NESTED_SAMPLE_PATH)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 9: Outer email parsing
+# ---------------------------------------------------------------------------
+
+
+def test_nested_eml_parses_without_error(nested_email):
+    assert nested_email is not None
+
+
+def test_nested_eml_subject(nested_email):
+    assert nested_email.subject == "FWD: Urgent password reset required"
+
+
+def test_nested_eml_sender_domain(nested_email):
+    assert "forward-srv.net" in nested_email.sender
+
+
+def test_nested_eml_reply_to_mismatch(nested_email):
+    assert "Reply-To does not match From domain" in nested_email.warnings
+
+
+def test_nested_eml_body_plain_present(nested_email):
+    assert nested_email.body_plain is not None
+    assert "forwarded" in nested_email.body_plain.lower()
+
+
+def test_nested_eml_hop_chain(nested_email):
+    hops = parse_hop_chain(nested_email)
+    assert len(hops) == 2
+    assert hops[0]["from_ip"] == "127.0.0.1"
+    assert hops[1]["from_ip"] == "91.108.4.200"
+
+
+def test_nested_eml_spf_softfail(nested_email):
+    assert parse_auth_results(nested_email).spf.result == "softfail"
+
+
+def test_nested_eml_dmarc_fail(nested_email):
+    assert parse_auth_results(nested_email).dmarc.result == "fail"
+
+
+# ---------------------------------------------------------------------------
+# GROUP 10: Nested email structure
+# ---------------------------------------------------------------------------
+
+
+def test_nested_email_found(nested_email):
+    assert len(nested_email.nested_emails) == 1
+
+
+def test_nested_email_depth(nested_email):
+    assert nested_email.nested_emails[0].depth == 1
+
+
+def test_nested_email_no_attachments_on_outer(nested_email):
+    assert nested_email.attachments == []
+
+
+# ---------------------------------------------------------------------------
+# GROUP 11: Inner email content
+# ---------------------------------------------------------------------------
+
+
+def test_inner_email_subject(nested_email):
+    inner = nested_email.nested_emails[0]
+    assert "suspended" in inner.subject.lower()
+
+
+def test_inner_email_sender_domain(nested_email):
+    inner = nested_email.nested_emails[0]
+    assert "secure-login-portal.net" in inner.sender
+
+
+def test_inner_email_spf_fail(nested_email):
+    inner = nested_email.nested_emails[0]
+    assert parse_auth_results(inner).spf.result == "fail"
+
+
+def test_inner_email_dmarc_fail(nested_email):
+    inner = nested_email.nested_emails[0]
+    assert parse_auth_results(inner).dmarc.result == "fail"
+
+
+def test_inner_email_body_contains_url(nested_email):
+    inner = nested_email.nested_emails[0]
+    assert inner.body_plain is not None
+    assert "secure-login-portal.net" in inner.body_plain
+
+
+# ---------------------------------------------------------------------------
+# GROUP 12: URL extraction across nesting levels
+# ---------------------------------------------------------------------------
+
+
+def test_nested_url_extraction_finds_inner_urls(nested_email):
+    findings = extract_urls(nested_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("secure-login-portal" in url for url in all_urls)
+
+
+def test_nested_url_source_labels(nested_email):
+    findings = extract_urls(nested_email)
+    sources = [finding.source for finding in findings]
+    assert any("nested" in source for source in sources)
+
+
+def test_nested_urls_all_defanged(nested_email):
+    findings = extract_urls(nested_email)
+    for finding in findings:
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_nested_url_depth_label(nested_email):
+    findings = extract_urls(nested_email)
+    nested_findings = [finding for finding in findings if "nested[1]" in finding.source]
+    assert len(nested_findings) >= 2
+
+
+# ---------------------------------------------------------------------------
+# GROUP 13: Batch processing with nested email
+# ---------------------------------------------------------------------------
+
+
+def test_process_file_nested_success(tmp_path):
+    result = process_file(NESTED_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    assert result.url_count >= 2
+
+
+def test_process_file_nested_output_structure(tmp_path):
+    result = process_file(NESTED_SAMPLE_PATH, tmp_path)
+    out = result.output_path
+    assert (out / "headers.txt").exists()
+    assert (out / "summary.txt").exists()
+    assert (out / "urls.txt").exists()
+    assert (out / "auth_analysis.txt").exists()
+    assert (out / "body.txt").exists()
+    assert (out / "body.html.txt").exists()
+    nested_dirs = [
+        path for path in out.iterdir() if path.is_dir() and path.name.startswith("nested_")
+    ]
+    assert len(nested_dirs) == 1
+
+
+def test_process_file_nested_inner_files(tmp_path):
+    result = process_file(NESTED_SAMPLE_PATH, tmp_path)
+    out = result.output_path
+    nested_dirs = [
+        path for path in out.iterdir() if path.is_dir() and path.name.startswith("nested_")
+    ]
+    inner = nested_dirs[0]
+    assert (inner / "headers.txt").exists()
+    assert (inner / "summary.txt").exists()
+    assert (inner / "urls.txt").exists()
+    assert (inner / "auth_analysis.txt").exists()
+
+
+def test_nested_headers_txt_verbatim(tmp_path):
+    result = process_file(NESTED_SAMPLE_PATH, tmp_path)
+    out = result.output_path
+    outer_headers = (out / "headers.txt").read_text(encoding="utf-8")
+    assert "Return-Path" in outer_headers
+    assert "X-Originating-IP" in outer_headers
+    nested_dirs = [
+        path for path in out.iterdir() if path.is_dir() and path.name.startswith("nested_")
+    ]
+    inner_headers = (nested_dirs[0] / "headers.txt").read_text(encoding="utf-8")
+    assert "secure-login-portal.net" in inner_headers
+
+
+def test_nested_urls_txt_contains_inner_urls(tmp_path):
+    result = process_file(NESTED_SAMPLE_PATH, tmp_path)
+    out = result.output_path
+    nested_dirs = [
+        path for path in out.iterdir() if path.is_dir() and path.name.startswith("nested_")
+    ]
+    inner_urls = (nested_dirs[0] / "urls.txt").read_text(encoding="utf-8")
+    assert "secure-login-portal" in inner_urls
+    assert "hxxp" in inner_urls or "hxxps" in inner_urls
