@@ -15,11 +15,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hive import __version__
-from hive.extractors.attachments import build_hashes_csv, collect_attachments, is_encrypted
+from hive.extractors.attachments import (
+    build_hashes_csv,
+    collect_attachments,
+    is_encrypted,
+    process_zip_attachment,
+)
 from hive.extractors.auth import auth_results_to_text, parse_auth_results
 from hive.extractors.body import get_body_html_txt, get_body_txt
 from hive.extractors.headers import defang, get_headers_txt, parse_hop_chain
 from hive.extractors.urls import UrlFinding, check_punycode, extract_urls, get_url_warnings
+from hive.extractors.zip_extractor import flatten_zip_entries
 from hive.parser.common import Attachment, ParsedEmail
 
 logger = logging.getLogger(__name__)
@@ -224,6 +230,34 @@ def _format_attachment_line(attachment: Attachment) -> str:
     return line
 
 
+def _format_attachment_lines(attachment: Attachment) -> list[str]:
+    """Format attachment summary lines, including ZIP contents when present."""
+    lines = [_format_attachment_line(attachment)]
+    lower = attachment.filename.lower()
+    content_type = (attachment.content_type or "").lower()
+    if not (lower.endswith(".zip") or "zip" in content_type):
+        return lines
+
+    zip_result = process_zip_attachment(attachment)
+    if zip_result is None:
+        return lines
+
+    if zip_result.skipped_encrypted:
+        lines.append("    └─ ⚠ ZIP is encrypted — contents not extracted")
+    if zip_result.errors:
+        lines.append(f"    └─ ⚠ {zip_result.errors[0]}")
+
+    for entry in flatten_zip_entries(zip_result.entries):
+        if not entry.data:
+            continue
+        sha256 = entry.hashes.get("sha256", "")
+        lines.append(
+            f"    └─ {entry.filename} ({entry.size} bytes) SHA256: {sha256}"
+        )
+
+    return lines
+
+
 def _write_summary_txt(
     email: ParsedEmail,
     url_findings: list[UrlFinding],
@@ -282,7 +316,8 @@ def _write_summary_txt(
         )
 
         if attachments:
-            lines.extend(_format_attachment_line(attachment) for attachment in attachments)
+            for attachment in attachments:
+                lines.extend(_format_attachment_lines(attachment))
         else:
             lines.append("  [None]")
 
@@ -350,6 +385,52 @@ def _write_attachments(email: ParsedEmail, email_dir: Path, no_extract: bool) ->
             )
 
 
+def _write_zip_contents(
+    email: ParsedEmail,
+    email_dir: Path,
+    no_extract: bool,
+) -> None:
+    """Extract and write ZIP attachment contents to zip_contents/ subdirectories."""
+    if no_extract or not email.attachments:
+        return
+
+    for attachment in email.attachments:
+        try:
+            zip_result = process_zip_attachment(attachment)
+            if zip_result is None or not zip_result.entries:
+                continue
+
+            zip_dir = (
+                email_dir / "attachments" / "zip_contents" / attachment.filename
+            )
+            zip_dir.mkdir(parents=True, exist_ok=True)
+
+            written = 0
+            for entry in flatten_zip_entries(zip_result.entries):
+                if not entry.data:
+                    continue
+                try:
+                    (zip_dir / entry.filename).write_bytes(entry.data)
+                    written += 1
+                except Exception:
+                    logger.exception(
+                        "Failed to write ZIP entry %s from %s",
+                        entry.filename,
+                        attachment.filename,
+                    )
+
+            logger.info(
+                "ZIP extracted: %s — %d files",
+                attachment.filename,
+                written,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to write ZIP contents for attachment: %s",
+                attachment.filename,
+            )
+
+
 def _write_email_files(
     email: ParsedEmail,
     email_dir: Path,
@@ -384,6 +465,7 @@ def _write_email_files(
             _write_summary_txt(email, url_findings, attachments, timestamp),
         )
         _write_attachments(email, email_dir, no_extract)
+        _write_zip_contents(email, email_dir, no_extract)
     except Exception:
         logger.exception(
             "Failed while writing output files for email at depth %s", email.depth

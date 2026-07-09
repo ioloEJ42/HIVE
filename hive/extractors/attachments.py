@@ -16,6 +16,7 @@ from dataclasses import replace
 from oletools.olevba import VBA_Parser
 
 from hive.parser.common import Attachment, ParsedEmail
+from hive.extractors.zip_extractor import ZipExtractionResult, extract_zip
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +469,66 @@ def build_hashes_csv(attachments: list) -> str:
         return output.getvalue()
 
 
+def process_zip_attachment(
+    attachment: Attachment,
+    depth: int = 0,
+    max_depth: int = 10,
+) -> ZipExtractionResult | None:
+    """
+    Process a ZIP attachment if it is not encrypted.
+    Returns ZipExtractionResult or None if not a ZIP or encrypted.
+    Never raises.
+    """
+    try:
+        lower = attachment.filename.lower()
+        ct = (attachment.content_type or "").lower()
+        is_zip = lower.endswith(".zip") or "zip" in ct
+        if not is_zip:
+            return None
+        if is_encrypted(attachment):
+            return None
+        return extract_zip(attachment, depth=depth, max_depth=max_depth)
+    except Exception:
+        logger.exception("Failed to process ZIP: %s", attachment.filename)
+        return None
+
+
+def collect_zip_entries_as_attachments(
+    zip_result: ZipExtractionResult,
+) -> list[Attachment]:
+    """
+    Convert ZipEntry objects to Attachment objects for hashes.csv.
+    Allows ZIP contents to appear in the hash output.
+    Never raises.
+    """
+    try:
+        from hive.extractors.zip_extractor import flatten_zip_entries
+
+        attachments: list[Attachment] = []
+        for entry in flatten_zip_entries(zip_result.entries):
+            if not entry.data:
+                continue
+            attachments.append(
+                Attachment(
+                    filename=f"[zip]{entry.filename}",
+                    original_filename=entry.original_filename,
+                    content_type=entry.content_type,
+                    data=entry.data,
+                    size=entry.size,
+                    hashes=entry.hashes,
+                    has_macros=entry.has_macros,
+                    macro_details=entry.macro_details,
+                )
+            )
+        return attachments
+    except Exception:
+        logger.exception(
+            "Failed to convert ZIP entries to attachments for %s",
+            zip_result.source_filename,
+        )
+        return []
+
+
 def collect_attachments(email: ParsedEmail) -> list[Attachment]:
     """Recursively collect all attachments from an email and its nested emails.
 
@@ -481,6 +542,14 @@ def collect_attachments(email: ParsedEmail) -> list[Attachment]:
         attachments = list(email.attachments)
         for nested in email.nested_emails:
             attachments.extend(collect_attachments(nested))
+        zip_attachments: list[Attachment] = []
+        for attachment in attachments:
+            zip_result = process_zip_attachment(attachment)
+            if zip_result is not None:
+                zip_attachments.extend(
+                    collect_zip_entries_as_attachments(zip_result)
+                )
+        attachments.extend(zip_attachments)
         return attachments
     except Exception:
         logger.exception("Failed to collect attachments from parsed email")

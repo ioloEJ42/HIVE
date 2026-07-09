@@ -1829,3 +1829,346 @@ def test_all_existing_tests_unaffected():
         findings = extract_urls(email)
         warnings = get_url_warnings(findings)
         assert isinstance(warnings, list)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 34: ZIP extraction
+# ---------------------------------------------------------------------------
+
+import io as io_module
+import zipfile as zipfile_module
+
+from hive.extractors.attachments import (
+    collect_zip_entries_as_attachments,
+    process_zip_attachment,
+)
+from hive.extractors.zip_extractor import (
+    ZipEntry,
+    ZipExtractionResult,
+    _guess_content_type,
+    _is_zip_encrypted,
+    extract_zip,
+    flatten_zip_entries,
+)
+from hive.parser.common import Attachment
+
+ZIP_SAMPLE_PATH = Path(__file__).parent / "samples" / "zip_attachment.eml"
+
+
+@pytest.fixture(scope="module")
+def zip_email():
+    """Parse the ZIP attachment sample once for reuse across tests."""
+    return parse_eml(ZIP_SAMPLE_PATH)
+
+
+def _make_zip_attachment(
+    files: dict[str, bytes],
+    filename: str = "test.zip",
+) -> Attachment:
+    buffer = io_module.BytesIO()
+    with zipfile_module.ZipFile(buffer, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    buffer.seek(0)
+    data = buffer.read()
+    return Attachment(
+        filename=filename,
+        original_filename=filename,
+        content_type="application/zip",
+        data=data,
+        size=len(data),
+        hashes={"md5": "", "sha1": "", "sha256": ""},
+    )
+
+
+# ---------------------------------------------------------------------------
+# GROUP 34A: zip_extractor.py unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_guess_content_type_pdf():
+    assert _guess_content_type("report.pdf") == "application/pdf"
+
+
+def test_guess_content_type_docx():
+    assert "wordprocessingml" in _guess_content_type("doc.docx")
+
+
+def test_guess_content_type_xlsx():
+    assert "spreadsheetml" in _guess_content_type("data.xlsx")
+
+
+def test_guess_content_type_pptx():
+    assert "presentationml" in _guess_content_type("slides.pptx")
+
+
+def test_guess_content_type_txt():
+    assert _guess_content_type("readme.txt") == "text/plain"
+
+
+def test_guess_content_type_zip():
+    assert _guess_content_type("archive.zip") == "application/zip"
+
+
+def test_guess_content_type_png():
+    assert _guess_content_type("image.png") == "image/png"
+
+
+def test_guess_content_type_unknown():
+    assert _guess_content_type("file.xyz") == "application/octet-stream"
+
+
+def test_is_zip_encrypted_false_for_normal_zip():
+    attachment = _make_zip_attachment({"test.txt": b"hello"})
+    assert _is_zip_encrypted(attachment.data) is False
+
+
+def test_is_zip_encrypted_true_for_encrypted_bytes():
+    encrypted_bytes = (
+        b"PK\x03\x04"
+        b"\x14\x00"
+        b"\x01\x00"
+        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x08\x00\x00\x00test.txt"
+    )
+    assert _is_zip_encrypted(encrypted_bytes) is True
+
+
+def test_is_zip_encrypted_false_for_empty_bytes():
+    assert _is_zip_encrypted(b"") is False
+
+
+def test_is_zip_encrypted_false_for_short_bytes():
+    assert _is_zip_encrypted(b"PK") is False
+
+
+def test_extract_zip_single_txt_file():
+    attachment = _make_zip_attachment(
+        {"document.txt": b"Hello https://evil.com/path and more text"}
+    )
+    result = extract_zip(attachment)
+    assert result.total_files == 1
+    assert len(result.entries) == 1
+    assert result.entries[0].filename == "document.txt"
+    assert result.skipped_encrypted is False
+    assert result.errors == []
+
+
+def test_extract_zip_url_found_in_txt():
+    attachment = _make_zip_attachment(
+        {"doc.txt": b"Visit https://malicious.com/payload for details"}
+    )
+    result = extract_zip(attachment)
+    assert len(result.entries) == 1
+    urls = result.entries[0].urls
+    assert len(urls) >= 1
+    assert any("malicious" in url for url in urls)
+
+
+def test_extract_zip_url_defanged():
+    attachment = _make_zip_attachment(
+        {"doc.txt": b"Visit https://malicious.com/payload"}
+    )
+    result = extract_zip(attachment)
+    for entry in result.entries:
+        for url in entry.urls:
+            assert not url.startswith("http")
+            assert "[.]" in url
+
+
+def test_extract_zip_hashes_populated():
+    attachment = _make_zip_attachment({"test.txt": b"content"})
+    result = extract_zip(attachment)
+    entry = result.entries[0]
+    assert entry.hashes["md5"]
+    assert entry.hashes["sha256"]
+    assert len(entry.hashes["sha256"]) == 64
+
+
+def test_extract_zip_multiple_files():
+    attachment = _make_zip_attachment({
+        "a.txt": b"https://evil-a.com",
+        "b.txt": b"https://evil-b.com",
+        "c.txt": b"no urls here",
+    })
+    result = extract_zip(attachment)
+    assert result.total_files == 3
+    assert len(result.entries) == 3
+
+
+def test_extract_zip_skips_directories():
+    buffer = io_module.BytesIO()
+    with zipfile_module.ZipFile(buffer, "w") as archive:
+        archive.mkdir("subdir/")
+        archive.writestr("subdir/file.txt", b"content")
+    buffer.seek(0)
+    attachment = Attachment(
+        filename="t.zip",
+        original_filename="t.zip",
+        content_type="application/zip",
+        data=buffer.read(),
+        size=0,
+        hashes={"md5": "", "sha1": "", "sha256": ""},
+    )
+    result = extract_zip(attachment)
+    assert all(not entry.filename.endswith("/") for entry in result.entries)
+
+
+def test_extract_zip_encrypted_zip_skipped():
+    encrypted_bytes = (
+        b"PK\x03\x04\x14\x00\x01\x00"
+        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x08\x00\x00\x00test.txt"
+    )
+    attachment = Attachment(
+        filename="enc.zip",
+        original_filename="enc.zip",
+        content_type="application/zip",
+        data=encrypted_bytes,
+        size=len(encrypted_bytes),
+        hashes={"md5": "", "sha1": "", "sha256": ""},
+    )
+    result = extract_zip(attachment)
+    assert result.skipped_encrypted is True
+    assert result.entries == []
+
+
+def test_extract_zip_never_raises():
+    attachment = Attachment(
+        filename="bad.zip",
+        original_filename="bad.zip",
+        content_type="application/zip",
+        data=b"not a zip file at all",
+        size=21,
+        hashes={"md5": "", "sha1": "", "sha256": ""},
+    )
+    result = extract_zip(attachment)
+    assert isinstance(result, ZipExtractionResult)
+    assert len(result.errors) >= 1
+
+
+def test_flatten_zip_entries_flat_list():
+    attachment = _make_zip_attachment({"a.txt": b"x", "b.txt": b"y"})
+    result = extract_zip(attachment)
+    flat = flatten_zip_entries(result.entries)
+    assert len(flat) == 2
+
+
+def test_flatten_zip_entries_empty():
+    flat = flatten_zip_entries([])
+    assert flat == []
+
+
+def test_process_zip_attachment_returns_result_for_zip():
+    attachment = _make_zip_attachment({"test.txt": b"content"})
+    result = process_zip_attachment(attachment)
+    assert result is not None
+    assert isinstance(result, ZipExtractionResult)
+
+
+def test_process_zip_attachment_returns_none_for_non_zip():
+    attachment = Attachment(
+        filename="doc.pdf",
+        original_filename="doc.pdf",
+        content_type="application/pdf",
+        data=b"PDF content",
+        size=11,
+        hashes={"md5": "", "sha1": "", "sha256": ""},
+    )
+    result = process_zip_attachment(attachment)
+    assert result is None
+
+
+def test_process_zip_attachment_never_raises():
+    attachment = Attachment(
+        filename="bad.zip",
+        original_filename="bad.zip",
+        content_type="application/zip",
+        data=b"garbage",
+        size=7,
+        hashes={"md5": "", "sha1": "", "sha256": ""},
+    )
+    result = process_zip_attachment(attachment)
+    assert result is None or isinstance(result, ZipExtractionResult)
+
+
+# ---------------------------------------------------------------------------
+# GROUP 34B: zip_attachment.eml integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_zip_email_parses(zip_email):
+    assert zip_email is not None
+    assert zip_email.subject == "Q1 Archive - Review Required"
+
+
+def test_zip_email_has_one_attachment(zip_email):
+    assert len(zip_email.attachments) == 1
+    assert zip_email.attachments[0].filename == "archive.zip"
+
+
+def test_zip_email_attachment_hashed(zip_email):
+    attachment = zip_email.attachments[0]
+    assert attachment.hashes["sha256"]
+    assert len(attachment.hashes["sha256"]) == 64
+
+
+def test_zip_body_url_found(zip_email):
+    findings = extract_urls(zip_email)
+    body = [finding for finding in findings if finding.source == "body:plain"]
+    assert any("quarterly-docs" in finding.defanged_url for finding in body)
+
+
+def test_zip_content_urls_found(zip_email):
+    findings = extract_urls(zip_email)
+    zip_findings = [finding for finding in findings if "/zip:" in finding.source]
+    assert len(zip_findings) >= 2
+
+
+def test_zip_content_url_source_label(zip_email):
+    findings = extract_urls(zip_email)
+    zip_findings = [finding for finding in findings if "/zip:" in finding.source]
+    for finding in zip_findings:
+        assert finding.source.startswith("attachment:archive.zip/zip:")
+
+
+def test_zip_malicious_url_found(zip_email):
+    findings = extract_urls(zip_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("malicious-zip-link" in url for url in all_urls)
+
+
+def test_zip_nested_url_found(zip_email):
+    findings = extract_urls(zip_email)
+    all_urls = [finding.defanged_url for finding in findings]
+    assert any("nested-zip-link" in url for url in all_urls)
+
+
+def test_zip_all_urls_defanged(zip_email):
+    for finding in extract_urls(zip_email):
+        assert not finding.defanged_url.startswith("http")
+        assert "[.]" in finding.defanged_url
+
+
+def test_zip_process_file_output(tmp_path):
+    result = process_file(ZIP_SAMPLE_PATH, tmp_path)
+    assert result.success is True
+    output_path = result.output_path
+    assert (output_path / "attachments" / "archive.zip").exists()
+    zip_contents = output_path / "attachments" / "zip_contents" / "archive.zip"
+    assert zip_contents.exists()
+    assert (zip_contents / "document.txt").exists()
+
+
+def test_zip_urls_txt_shows_zip_source(tmp_path):
+    result = process_file(ZIP_SAMPLE_PATH, tmp_path)
+    urls = (result.output_path / "urls.txt").read_text(encoding="utf-8")
+    assert "archive.zip/zip:" in urls
+    assert "malicious-zip-link" in urls
+
+
+def test_zip_summary_shows_zip_contents(tmp_path):
+    result = process_file(ZIP_SAMPLE_PATH, tmp_path)
+    summary = (result.output_path / "summary.txt").read_text(encoding="utf-8")
+    assert "└─" in summary
+

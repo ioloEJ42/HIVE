@@ -1,0 +1,59 @@
+Return-Path: <reports@quarterly-docs.com>
+Received: from mail.quarterly-docs.com (mail.quarterly-docs.com [198.51.100.44])
+        by mx1.protection.outlook.com with SMTP id r2si1043567qkd
+        for <finance@vunhst.nhs.uk>; Thu, 14 Mar 2024 11:00:04 +0000
+Received: from localhost (localhost [127.0.0.1])
+        by mail.quarterly-docs.com with ESMTP id t3u4v5w6x7
+        for <finance@vunhst.nhs.uk>; Thu, 14 Mar 2024 11:00:00 +0000
+Received-SPF: fail (domain of reports@quarterly-docs.com does not designate
+        198.51.100.44 as permitted sender)
+        receiver=mx1.protection.outlook.com;
+        client-ip=198.51.100.44;
+        helo=mail.quarterly-docs.com
+Authentication-Results: mx1.protection.outlook.com;
+        dmarc=fail action=none header.from=quarterly-docs.com;
+        spf=fail smtp.mailfrom=reports@quarterly-docs.com;
+        dkim=none
+From: "Quarterly Reports" <reports@quarterly-docs.com>
+Reply-To: reports@quarterly-docs.com
+To: finance@vunhst.nhs.uk
+Subject: Q1 Archive - Review Required
+Date: Thu, 14 Mar 2024 11:00:00 +0000
+Message-ID: <20240314110000.zip1043567@mail.quarterly-docs.com>
+MIME-Version: 1.0
+X-Mailer: SendGrid
+X-Originating-IP: 198.51.100.44
+Content-Type: multipart/mixed; boundary="=_HIVE_ZIP_BOUNDARY_001"
+
+--=_HIVE_ZIP_BOUNDARY_001
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+Dear Finance Team,
+
+Please find attached the Q1 archive for your review.
+
+If the attachment does not open, use this link:
+https://quarterly-docs.com/zip-report?ref=Q12024
+
+Regards,
+Quarterly Reports Team
+
+--=_HIVE_ZIP_BOUNDARY_001
+Content-Type: application/zip
+Content-Disposition: attachment; filename="archive.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBBQAAAAAAOWs6Vw1hYP0XQAAAF0AAAAMAAAAZG9jdW1lbnQudHh0VmlzaXQgaHR0cHM6Ly9t
+YWxpY2lvdXMtemlwLWxpbmsuY29tL3BheWxvYWQgZm9yIGRldGFpbHMKU3VwcG9ydDogaHR0cDov
+L3ppcC1zdXBwb3J0Lm5ldC9oZWxwUEsDBBQAAAAAAOWs6Vzyad9yIwAAACMAAAAKAAAAcmVhZG1l
+LnR4dFRoaXMgaXMgYSByZWFkbWUgZmlsZSB3aXRoIG5vIFVSTHMuUEsDBBQAAAAAAOWs6Vy8QW1k
+pAAAAKQAAAAKAAAAbmVzdGVkLnppcFBLAwQUAAAAAADlrOlcb1OHrDAAAAAwAAAACQAAAGlubmVy
+LnR4dE5lc3RlZCBjb250ZW50OiBodHRwczovL25lc3RlZC16aXAtbGluay5jb20vZGVlcFBLAQIU
+AxQAAAAAAOWs6VxvU4esMAAAADAAAAAJAAAAAAAAAAAAAACAAQAAAABpbm5lci50eHRQSwUGAAAA
+AAEAAQA3AAAAVwAAAAAAUEsBAhQDFAAAAAAA5azpXDWFg/RdAAAAXQAAAAwAAAAAAAAAAAAAAIAB
+AAAAAGRvY3VtZW50LnR4dFBLAQIUAxQAAAAAAOWs6Vzyad9yIwAAACMAAAAKAAAAAAAAAAAAAACA
+AYcAAAByZWFkbWUudHh0UEsBAhQDFAAAAAAA5azpXLxBbWSkAAAApAAAAAoAAAAAAAAAAAAAAIAB
+0gAAAG5lc3RlZC56aXBQSwUGAAAAAAMAAwCqAAAAngEAAAAA
+
+--=_HIVE_ZIP_BOUNDARY_001--

@@ -483,6 +483,36 @@ def _collect_email_urls(
                 exc_info=True,
             )
 
+    for attachment in email.attachments:
+        try:
+            from hive.extractors.attachments import process_zip_attachment
+            from hive.extractors.zip_extractor import (
+                extract_entry_raw_urls,
+                flatten_zip_entries,
+            )
+
+            zip_result = process_zip_attachment(
+                attachment,
+                depth=0,
+                max_depth=10,
+            )
+            if zip_result is None:
+                continue
+            for entry in flatten_zip_entries(zip_result.entries):
+                source = f"attachment:{attachment.filename}/zip:{entry.filename}"
+                raw_urls = extract_entry_raw_urls(
+                    entry.filename,
+                    entry.content_type,
+                    entry.data,
+                )
+                add_urls(raw_urls, source, email.depth)
+        except Exception:
+            logger.warning(
+                "Failed to extract URLs from ZIP attachment: %s",
+                attachment.filename,
+                exc_info=True,
+            )
+
 
 def extract_urls(email: ParsedEmail) -> list[UrlFinding]:
     """Extract, deduplicate, and defang URLs from a parsed email.

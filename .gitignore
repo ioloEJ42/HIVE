@@ -57,6 +57,9 @@ tests/samples/*.xlsx
 !tests/samples/rtf_attachment.eml
 !tests/samples/test_attachment.rtf
 !tests/create_test_rtf.py
+!tests/samples/zip_attachment.eml
+!tests/samples/test_attachment.zip
+!tests/create_test_zip.py
 
 # ─── macOS ────────────────────────────────────────────────
 .DS_Store
