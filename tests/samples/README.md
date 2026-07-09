@@ -1,0 +1,36 @@
+# HIVE Test Samples
+
+This directory contains synthetic `.eml` files used by the HIVE test suite.
+
+## Important
+
+These files are **artificially constructed** for testing purposes.
+They do **not** contain real email addresses, real domains used
+maliciously, real IP addresses belonging to victims or attackers,
+or any data from actual incidents.
+
+The domains, IPs, and URLs in these files are either:
+- RFC 5737 / RFC 3849 documentation ranges (where applicable)
+- Clearly fictional domains constructed for test purposes only
+
+Do **not** add real phishing emails or incident samples to this
+directory. Real samples must never be committed to version control.
+
+## Sample files
+
+| File | Tests | Purpose |
+|------|-------|---------|
+| simple_phishing.eml | Groups 1-8 | Baseline: spoofed sender, SPF/DMARC fail, Reply-To mismatch, body URLs |
+| nested_email.eml | Groups 9-13 | Evasion chain: outer email wrapping inner email with malicious URLs |
+| with_attachment.eml | Group 14 | Attachment pipeline: txt attachment with URLs, hashes.csv output |
+| malformed_headers.eml | Group 15 | Resilience: missing Date/Received headers, no auth results |
+| html_only.eml | Group 16 | HTML body handling: no plain text, script/style stripping, href extraction |
+
+## Adding new samples
+
+If you need to add a new synthetic sample:
+1. Construct it by hand or with a script — never use a real email
+2. Verify it contains no real PII, real incident data, or live URLs
+3. Add a `.gitignore` exception in the root `.gitignore`
+4. Document it in this table
+5. Write tests for it in `tests/test_hive.py`
