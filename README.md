@@ -28,6 +28,9 @@ hive_output/
 - SPF / DKIM / DMARC / ARC header analysis (stamped headers, no DNS calls)
 - URL extraction from email body AND attachments (PDF, DOCX, XLSX, PPTX, RTF, TXT)
 - All URLs defanged by default (`hxxp`, `[.]` notation)
+- URL shortener detection (40+ known domains flagged with warning)
+- Punycode domain detection with decoded human-readable form
+- Homoglyph / mixed-script domain detection (e.g. Cyrillic characters masquerading as Latin) using Unicode character analysis
 - Attachment extraction with MD5 / SHA1 / SHA256 hashing
 - VBA macro detection on Office documents (oletools)
 - Input file hashing for evidence integrity
@@ -110,7 +113,7 @@ hive parse ./inbox/ -o ./output
 
 ## Safety design
 
-HIVE parses attacker-controlled email content and must be treated accordingly. All parsing uses pure Python libraries. Nothing in the email body or attachments is executed, and no Office applications are invoked. V1 makes no network calls; authentication results are read from stamped headers only, with no live DNS lookups. Attachment filenames are sanitised before writing to disk to prevent path traversal. HTML bodies are saved as `.html.txt` with a safety header to reduce the risk of accidental browser execution. Recursion depth and input file size limits are enforced to contain resource abuse. Every input file is hashed (MD5, SHA1, SHA256) at parse time for evidence integrity.
+HIVE parses attacker-controlled email content and must be treated accordingly. All parsing uses pure Python libraries. Nothing in the email body or attachments is executed, and no Office applications are invoked. V1 makes no network calls; authentication results are read from stamped headers only, with no live DNS lookups. Attachment filenames are sanitised before writing to disk to prevent path traversal. HTML bodies are saved as `.html.txt` with a safety header to reduce the risk of accidental browser execution. Recursion depth and input file size limits are enforced to contain resource abuse. Every input file is hashed (MD5, SHA1, SHA256) at parse time for evidence integrity. Extracted URLs are additionally screened for URL shorteners, punycode encoding, and homoglyph characters — techniques commonly used to disguise malicious destinations from analysts.
 
 ## Dependencies
 

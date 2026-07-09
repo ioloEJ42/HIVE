@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from io import BytesIO
+from urllib.parse import urlparse
 
 from docx import Document
 from openpyxl import load_workbook
@@ -38,6 +40,19 @@ _HREF_SRC_RE = re.compile(
 # Trailing punctuation often captured at end of sentences
 _TRAILING_PUNCTUATION = ".,;:!?)'\""
 
+_URL_SHORTENERS = frozenset({
+    "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
+    "rebrand.ly", "short.io", "tiny.cc", "is.gd", "buff.ly",
+    "cutt.ly", "bl.ink", "rb.gy", "shorte.st", "adf.ly",
+    "bc.vc", "trib.al", "snip.ly", "clck.ru", "qr.ae",
+    "x.co", "v.gd", "qurl.com", "budurl.com", "fur.ly",
+    "lnkd.in", "youtu.be", "amzn.to", "fb.me", "po.st",
+    "dlvr.it", "ift.tt", "soo.gd", "s2r.co", "clk.im",
+    "tny.im", "tr.im", "url4.eu", "ff.im", "su.pr",
+})
+
+_SCRIPT_MARKERS = ("LATIN", "CYRILLIC", "GREEK", "ARABIC", "ARMENIAN", "GEORGIAN")
+
 
 @dataclass
 class UrlFinding:
@@ -47,6 +62,135 @@ class UrlFinding:
     defanged_url: str  # defanged version safe for analyst output
     source: str  # human-readable source label, e.g. body:plain or attachment:file.pdf
     depth: int  # email nesting depth where the URL was found (0 = top level)
+    is_shortener: bool = False
+    is_punycode: bool = False
+    homoglyph_detail: str = ""
+
+
+def _is_url_shortener(url: str) -> bool:
+    """Return True if the URL uses a known shortener domain."""
+    try:
+        host = urlparse(url).hostname or ""
+        host = host.lower().lstrip("www.")
+        return host in _URL_SHORTENERS
+    except Exception:
+        return False
+
+
+def check_punycode(url: str) -> tuple[bool, str]:
+    """
+    Detect punycode-encoded domains in a URL.
+
+    Returns (is_punycode, decoded_domain). decoded_domain is the human-readable
+    form if punycode was found, empty string otherwise. Never raises.
+    """
+    try:
+        host = urlparse(url).hostname or ""
+        if not host:
+            return False, ""
+        if "xn--" not in host.lower():
+            return False, ""
+        try:
+            decoded = host.encode("ascii").decode("idna")
+            if decoded != host:
+                return True, decoded
+        except (UnicodeError, UnicodeDecodeError):
+            return True, host
+        return False, ""
+    except Exception:
+        return False, ""
+
+
+def _script_from_char(char: str) -> str | None:
+    """Return a script marker for a hostname character, or None for separators."""
+    if char in ".-":
+        return None
+    if char.isascii():
+        return "LATIN"
+    try:
+        name = unicodedata.name(char, "")
+        for marker in _SCRIPT_MARKERS:
+            if marker in name:
+                return marker
+    except Exception:
+        pass
+    return "OTHER"
+
+
+def _check_homoglyphs(url: str) -> tuple[bool, str]:
+    """
+    Detect non-ASCII characters and mixed Unicode scripts in a domain.
+
+    Returns (is_suspicious, detail_string). Never raises.
+    """
+    try:
+        host = urlparse(url).hostname or ""
+        if not host or host.isascii():
+            return False, ""
+
+        scripts: set[str] = set()
+        suspicious_chars: list[str] = []
+
+        for char in host:
+            script = _script_from_char(char)
+            if script is None:
+                continue
+            scripts.add(script)
+            if not char.isascii():
+                try:
+                    char_name = unicodedata.name(char, "UNKNOWN")
+                    code_point = f"U+{ord(char):04X}"
+                    suspicious_chars.append(f"{char} ({code_point}, {char_name})")
+                except Exception:
+                    suspicious_chars.append(char)
+
+        if len(scripts) > 1:
+            detail_base = "mixed-script domain (possible homoglyph attack)"
+        else:
+            detail_base = "non-ASCII characters in domain"
+
+        if suspicious_chars:
+            detail = f"{detail_base}\n{', '.join(suspicious_chars)}"
+        else:
+            detail = detail_base
+
+        return True, detail
+    except Exception:
+        return False, ""
+
+
+def get_url_warnings(findings: list[UrlFinding]) -> list[str]:
+    """
+    Return warning strings for flagged URLs for summary output.
+
+    One warning per flagged URL per category. Never raises.
+    """
+    warnings: list[str] = []
+    try:
+        for finding in findings:
+            if finding.is_shortener:
+                warnings.append(
+                    "URL shortener detected — destination unknown: "
+                    f"{finding.defanged_url}"
+                )
+            if finding.is_punycode:
+                _, decoded = check_punycode(finding.raw_url)
+                encoded_host = urlparse(finding.raw_url).hostname or ""
+                encoded_defanged = defang(encoded_host) if encoded_host else finding.defanged_url
+                decoded_defanged = defang(decoded) if decoded else ""
+                warnings.append(
+                    "Punycode domain detected — renders as: "
+                    f"{encoded_defanged} → {decoded_defanged}"
+                )
+            if finding.homoglyph_detail:
+                main_detail = finding.homoglyph_detail.split("\n", 1)[0]
+                warnings.append(
+                    f"Suspicious Unicode in domain — {main_detail}: "
+                    f"{finding.defanged_url}"
+                )
+    except Exception:
+        logger.exception("Failed to build URL warnings")
+    return warnings
 
 
 def _strip_trailing_punctuation(url: str) -> str:
@@ -288,12 +432,18 @@ def _extract_from_attachment(att: Attachment) -> list[str]:
 
 
 def _make_finding(raw_url: str, source: str, depth: int) -> UrlFinding:
-    """Create a UrlFinding with a defanged URL."""
+    """Create a UrlFinding with a defanged URL and detection flags."""
+    is_shortener = _is_url_shortener(raw_url)
+    is_punycode, _ = check_punycode(raw_url)
+    is_homoglyph, homoglyph_detail = _check_homoglyphs(raw_url)
     return UrlFinding(
         raw_url=raw_url,
         defanged_url=defang(raw_url),
         source=source,
         depth=depth,
+        is_shortener=is_shortener,
+        is_punycode=is_punycode,
+        homoglyph_detail=homoglyph_detail if is_homoglyph else "",
     )
 
 
@@ -365,6 +515,9 @@ def extract_urls(email: ParsedEmail) -> list[UrlFinding]:
                         defanged_url=finding.defanged_url,
                         source=prefixed_source,
                         depth=finding.depth,
+                        is_shortener=finding.is_shortener,
+                        is_punycode=finding.is_punycode,
+                        homoglyph_detail=finding.homoglyph_detail,
                     )
                 )
 

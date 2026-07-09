@@ -17,7 +17,7 @@ from hive.extractors.attachments import build_hashes_csv, collect_attachments
 from hive.extractors.auth import auth_results_to_text, parse_auth_results
 from hive.extractors.body import get_body_html_txt, get_body_txt
 from hive.extractors.headers import defang, get_headers_txt, parse_hop_chain
-from hive.extractors.urls import UrlFinding, extract_urls
+from hive.extractors.urls import UrlFinding, check_punycode, extract_urls, get_url_warnings
 from hive.parser.common import Attachment, ParsedEmail
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,28 @@ def _level_url_findings(email: ParsedEmail) -> list[UrlFinding]:
     return [finding for finding in extract_urls(email) if finding.depth == email.depth]
 
 
+def _format_url_finding_annotations(finding: UrlFinding) -> list[str]:
+    """Return indented annotation lines for flagged URL findings."""
+    annotations: list[str] = []
+    try:
+        if finding.is_shortener:
+            annotations.append("    ⚠ URL shortener — destination unknown")
+        if finding.is_punycode:
+            _, decoded = check_punycode(finding.raw_url)
+            decoded_defanged = defang(decoded) if decoded else finding.defanged_url
+            annotations.append(
+                f"    ⚠ Punycode domain — renders as: {decoded_defanged}"
+            )
+        if finding.homoglyph_detail:
+            parts = finding.homoglyph_detail.split("\n", 1)
+            annotations.append(f"    ⚠ Suspicious Unicode — {parts[0]}")
+            if len(parts) > 1 and parts[1].strip():
+                annotations.append(f"    ⚠ Suspicious chars: {parts[1].strip()}")
+    except Exception:
+        logger.exception("Failed to format URL finding annotations")
+    return annotations
+
+
 def _write_urls_txt(findings: list[UrlFinding], email_name: str) -> str:
     """Format the urls.txt content for a single email level."""
     try:
@@ -124,17 +146,19 @@ def _write_urls_txt(findings: list[UrlFinding], email_name: str) -> str:
             lines.append("# No URLs found.")
             return "\n".join(lines)
 
-        grouped: dict[str, list[str]] = {}
+        grouped: dict[str, list[UrlFinding]] = {}
         source_order: list[str] = []
         for finding in findings:
             if finding.source not in grouped:
                 grouped[finding.source] = []
                 source_order.append(finding.source)
-            grouped[finding.source].append(finding.defanged_url)
+            grouped[finding.source].append(finding)
 
         for index, source in enumerate(source_order):
             lines.append(f"[{source}]")
-            lines.extend(grouped[source])
+            for finding in grouped[source]:
+                lines.append(finding.defanged_url)
+                lines.extend(_format_url_finding_annotations(finding))
             if index < len(source_order) - 1:
                 lines.append("")
 
@@ -257,9 +281,12 @@ def _write_summary_txt(
         else:
             lines.append("  [None found]")
 
-        lines.extend(["", f"WARNINGS ({len(email.warnings)})"])
-        if email.warnings:
-            lines.extend(f"  ⚠ {warning}" for warning in email.warnings)
+        url_warnings = get_url_warnings(url_findings)
+        all_warnings = list(email.warnings) + url_warnings
+
+        lines.extend(["", f"WARNINGS ({len(all_warnings)})"])
+        if all_warnings:
+            lines.extend(f"  ⚠ {warning}" for warning in all_warnings)
         else:
             lines.append("  [None]")
 

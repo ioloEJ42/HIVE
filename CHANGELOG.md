@@ -5,6 +5,20 @@ Semantic versioning is used: MAJOR.MINOR.PATCH
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-07-09
+
+### Added
+
+- **URL shortener detection** — flags URLs using 40+ known shortener domains (bit.ly, tinyurl.com, t.co etc.) with a warning in urls.txt and summary.txt; destination marked as unknown
+- **Punycode domain detection** — identifies xn-- encoded domains and decodes them to their human-readable Unicode form; both forms shown in output
+- **Homoglyph / mixed-script detection** — detects non-ASCII and mixed-script characters in domains using Python unicodedata stdlib; flags Cyrillic, Greek, Arabic, Armenian, and Georgian characters mixed with Latin script; reports exact character name and codepoint (e.g. а U+0430 CYRILLIC SMALL LETTER A); no third-party dependencies
+
+### Changed
+
+- urls.txt now includes indented warning annotations beneath flagged URLs (shortener, punycode, homoglyph)
+- summary.txt WARNINGS section now includes URL-level warnings alongside email-level parser warnings
+- UrlFinding dataclass extended with is_shortener, is_punycode, and homoglyph_detail fields
+
 ## [1.0.0] - 2026-07-09
 
 ### Added
