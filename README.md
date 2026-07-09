@@ -132,7 +132,7 @@ pip install pytest
 pytest tests/ -v
 ```
 
-132 tests across 23 groups covering parsing, extraction, authentication analysis, defanging, safety checks, batch processing, and evidence integrity.
+194 tests across 28 groups covering parsing, extraction, authentication analysis, defanging, safety checks, batch processing, evidence integrity, and URL extraction from PDF, DOCX, XLSX, PPTX, and RTF attachments.
 
 ## Version
 
